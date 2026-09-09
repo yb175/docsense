@@ -15,7 +15,8 @@
     "test:documents:unit": "tsx --env-file-if-exists=.env scripts/document-unit.ts",
     "test:documents:integration": "tsx --env-file-if-exists=.env scripts/document-integration.ts",
     "test:documents:e2e": "tsx --env-file-if-exists=.env scripts/document-e2e.ts",
-    "e2e:sessions": "tsx --env-file-if-exists=.env scripts/session-e2e.ts"
+    "e2e:sessions": "tsx --env-file-if-exists=.env scripts/session-e2e.ts",
+    "e2e:comments": "tsx --env-file-if-exists=.env scripts/comments-e2e.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1128.0",
