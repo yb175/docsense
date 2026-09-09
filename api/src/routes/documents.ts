@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
-import { getDocument, getDocumentContent, listOwnedDocuments, uploadDocument } from '../controllers/document.controller.js';
+import { getDocument, getDocumentContent, getDocumentSummary, listOwnedDocuments, uploadDocument } from '../controllers/document.controller.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { env } from '../lib/env.js';
 import type { AppEnv } from '../types/index.js';
@@ -9,6 +9,7 @@ import type { AppEnv } from '../types/index.js';
 export const documentRoutes = new Hono<AppEnv>();
 
 documentRoutes.get('/', requireAuth, listOwnedDocuments);
+documentRoutes.get('/:documentId/summary', optionalAuth, getDocumentSummary);
 documentRoutes.get('/:documentId', optionalAuth, getDocument);
 documentRoutes.get('/:documentId/content', optionalAuth, getDocumentContent);
 

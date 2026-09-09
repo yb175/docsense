@@ -45,7 +45,7 @@ Services:
 
 Local Compose defaults to Mailpit, so OTPs appear in the Mailpit UI and are not delivered to external inboxes. For real delivery, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `MAIL_FROM` in `.env` before starting Compose. For Gmail, use `smtp.gmail.com`, port `587`, and a Gmail app password.
 
-The PostgreSQL and Redis data volumes are preserved by `docker compose down`. Use `docker compose down -v` only when you intentionally want to delete them.
+The PostgreSQL and Redis data volumes are preserved by `docker compose down`. Use `docker compose down -v` only when you intentionally want to delete them. PostgreSQL uses the `pgvector/pgvector:pg16` image because AI chunk embeddings are stored in the same database.
 
 ## Run the API locally
 
@@ -99,6 +99,81 @@ Run static checks:
 npm run typecheck
 npm run build
 ```
+
+With the API, PostgreSQL, Redis, and Mailpit running, execute the AI persistence checks after applying migrations:
+
+```bash
+npm run test:ai:foundation
+```
+
+The check verifies pgvector availability, AI persistence CRUD, embedding dimensions, uniqueness, conversation document isolation, and database-level conversation principal constraints.
+
+PDF extraction checks can be run without external AI providers or S3:
+
+```bash
+npm run test:ai:pdf-loader
+```
+
+They cover page ordering, extracted text, empty pages, malformed PDFs, and visual-fallback flags.
+
+Selective VLM checks can be run without provider credentials:
+
+```bash
+npm run test:ai:vlm-loader
+```
+
+They verify that normal pages bypass Gemini, poor pages receive page-specific image input, unified text retains page metadata, and provider failures are surfaced.
+
+LangChain chunking checks can be run without external providers:
+
+```bash
+npm run test:ai:splitter
+```
+
+They cover deterministic ordering, chunk size/overlap, page metadata, empty input, and invalid splitter configuration.
+
+Embedding and retrieval checks:
+
+```bash
+npm run test:ai:embeddings
+npm run test:ai:embeddings:integration
+```
+
+The unit checks validate LangChain embedding dimensions and provider failures. The integration checks validate pgvector persistence, retry-safe upserts, similarity ranking, unrelated queries, and strict document-scoped retrieval.
+
+Summary checks:
+
+```bash
+npm run test:ai:summary
+npm run test:ai:summary:integration
+```
+
+They cover chunk summaries, grounded prompt construction, final 3–5 sentence validation, provider failures, persistence, and processing status transitions.
+
+RAG context checks:
+
+```bash
+npm run test:ai:context
+npm run test:ai:context:live
+```
+
+The unit checks validate source/page formatting, conversation trimming, no-context behavior, and prompt grounding. The live check uses the configured Gemini embedding key once for chunk embeddings and once for query retrieval, then cleans up its database fixtures.
+
+Chat endpoint:
+
+```text
+POST /api/documents/:documentId/chat
+```
+
+It returns SSE events (`message.start`, `message.token`, `message.complete`, and `message.error`) and authorizes owners or verified guest sessions before retrieval.
+
+Chat streaming checks:
+
+```bash
+npm run test:ai:chat
+```
+
+They cover token extraction, primary-provider streaming, pre-token fallback, and prevention of silently merging fallback output after partial primary output.
 
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
