@@ -108,6 +108,14 @@ npm run test:ai:foundation
 
 The check verifies pgvector availability, AI persistence CRUD, embedding dimensions, uniqueness, conversation document isolation, and database-level conversation principal constraints.
 
+PDF extraction checks can be run without external AI providers or S3:
+
+```bash
+npm run test:ai:pdf-loader
+```
+
+They cover page ordering, extracted text, empty pages, malformed PDFs, and visual-fallback flags.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash

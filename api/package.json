@@ -16,6 +16,7 @@
     "test:documents:integration": "tsx --env-file-if-exists=.env scripts/document-integration.ts",
     "test:documents:e2e": "tsx --env-file-if-exists=.env scripts/document-e2e.ts",
     "test:ai:foundation": "tsx --env-file-if-exists=.env scripts/ai-foundation-integration.ts",
+    "test:ai:pdf-loader": "tsx --env-file-if-exists=.env scripts/pdf-loader-unit.ts",
     "e2e:sessions": "tsx --env-file-if-exists=.env scripts/session-e2e.ts",
     "e2e:comments": "tsx --env-file-if-exists=.env scripts/comments-e2e.ts",
     "test:comments:connections": "tsx --env-file-if-exists=.env scripts/comment-connection-unit.ts",
@@ -30,6 +31,8 @@
     "ioredis": "^6.0.0",
     "jose": "^6.2.12",
     "nodemailer": "^10.0.1",
+    "pdfjs-dist": "^6.3.289",
+    "pdfjs-dist": "^6.3.289",
     "prisma": "6.19.3",
     "ws": "^8.21.3",
     "zod": "^4.5.4"
