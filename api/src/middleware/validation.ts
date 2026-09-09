@@ -25,12 +25,6 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 
-export const chatSchema = z.strictObject({
-  question: z.string().trim().min(1).max(4_000),
-  conversationId: z.string().uuid().optional(),
-});
-export type ChatInput = z.infer<typeof chatSchema>;
-
 const commentMarkSchema = z.enum(['bold', 'italic']);
 const commentSpanSchema = z.strictObject({
   text: z.string().min(1).max(10_000),

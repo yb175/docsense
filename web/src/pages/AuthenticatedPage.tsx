@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { goTo } from '../utils/navigation';
 import { API } from '../config';
+import { documentSummaries } from '../mocks/dashboard.mock';
 
-type Document = { id: string; filename: string; sizeBytes: number; createdAt: string; updatedAt: string; processingStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'; aiSummary: string | null };
+type Document = { id: string; filename: string; sizeBytes: number; createdAt: string; updatedAt: string };
 type User = { id: string; name: string; email: string };
 type Share = { id: string; inviteeEmail: string; inviteeName: string; status: string; expiresAt: string | null };
-const log = (step: string, detail = '') => console.info(`[docsense:web] ${step}${detail ? ` ${detail}` : ''}`);
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, { ...init, headers: { ...(init?.headers ?? {}) }, credentials: 'include' });
@@ -15,13 +15,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 const formatSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-
-function DocumentSummary({ document }: { document: Document }) {
-  const ready = document.processingStatus === 'COMPLETED' && Boolean(document.aiSummary);
-  return <div className={`summary-block${ready ? ' is-ready' : ' is-processing'}`} aria-live="polite">
-    {ready ? <p>{document.aiSummary}</p> : <div className="summary-skeleton"><span className="summary-status">{document.processingStatus === 'FAILED' ? 'Analysis unavailable' : 'Analyzing document…'}</span><i /><i /><i /></div>}
-  </div>;
-}
 
 export function AuthenticatedPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -35,19 +28,13 @@ export function AuthenticatedPage() {
   const [error, setError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const load = async () => { try { const next = (await api<{ documents: Document[] }>('/api/documents')).documents.filter((document) => document.processingStatus !== 'FAILED'); setDocuments(next); return next; } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load documents'); return []; } };
+  const load = async () => { try { setDocuments((await api<{ documents: Document[] }>('/api/documents')).documents); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load documents'); } };
   useEffect(() => {
     void api<{ user: User }>('/auth/me').then(({ user: currentUser }) => setUser(currentUser)).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to load account'));
     void load();
   }, []);
-  useEffect(() => {
-    if (!documents.some((document) => document.processingStatus === 'PROCESSING' || document.processingStatus === 'PENDING')) return;
-    const interval = window.setInterval(() => void load(), 3000);
-    return () => window.clearInterval(interval);
-  }, [documents]);
   useEffect(() => {
     const updateScrollChrome = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
@@ -101,9 +88,9 @@ export function AuthenticatedPage() {
     </header>
     <section className="dashboard-content">
       <div className="dashboard-greeting"><div><h1>{user ? `Welcome back, ${user.name}.` : 'Welcome back.'}</h1><p>Your tactile document intelligence hub &amp; semantic legal analysis library.</p></div></div>
-      <label className={`upload-zone${isUploading ? ' is-uploading' : ''}`}><span className="upload-button"><span className="material-symbols-outlined">{isUploading ? 'progress_activity' : 'upload_file'}</span>{isUploading ? 'Uploading PDF…' : 'Upload PDF'}<input type="file" accept="application/pdf" disabled={isUploading} onChange={async (event) => { const input = event.currentTarget; const file = input.files?.[0]; if (!file) return; const form = new FormData(); form.append('file', file); setIsUploading(true); setError(''); setMessage(''); log('upload:start', `filename=${file.name} bytes=${file.size}`); try { const uploaded = await api<{ id: string }>('/api/documents', { method: 'POST', body: form }); await load(); setMessage('PDF uploaded. AI analysis is processing before the workspace opens.'); log('upload:complete', `document=${uploaded.id}`); } catch (cause) { input.value = ''; log('upload:failed'); setError(`${cause instanceof Error ? cause.message : 'Upload failed'} Upload canceled. Please re-upload the PDF.`); } finally { setIsUploading(false); } }} /></span><p>{isUploading ? 'Keep this window open while the upload completes.' : 'or drag and drop here'}</p></label>
+      <label className="upload-zone"><span className="upload-button"><span className="material-symbols-outlined">upload_file</span>Upload PDF<input type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; const form = new FormData(); form.append('file', file); try { await api('/api/documents', { method: 'POST', body: form }); await load(); setMessage('PDF uploaded.'); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed'); } }} /></span><p>or drag and drop here</p></label>
       <div className="reports-heading" data-reveal><h2>Recent Intelligence Reports</h2></div>
-      <div className={`document-grid${visibleDocuments.length ? '' : ' is-empty'}`}>{visibleDocuments.length ? visibleDocuments.map((document) => <article className="document-card" data-reveal key={document.id}><div><div className="document-card-title"><span className="pdf-icon"><span className="material-symbols-outlined">picture_as_pdf</span></span><div><h3>{document.filename}</h3><p>Uploaded {new Date(document.updatedAt).toLocaleDateString()}</p></div></div><DocumentSummary document={document} /></div><div className="card-actions"><button className="primary-button" onClick={() => goTo(`/documents/${document.id}`)}>Open Workspace <span className="material-symbols-outlined">arrow_forward</span></button><button className="round-action" onClick={() => void openShare(document)} aria-label={`Share ${document.filename}`}><span className="material-symbols-outlined">share</span></button></div></article>) : <div className="empty-state dashboard-empty-state"><span className="empty-state-icon"><span className="material-symbols-outlined">description</span></span><strong>No documents yet</strong><span>Your library is ready for its first PDF.</span><small>Upload a document above to start reviewing and analyzing it.</small></div>}</div>
+      <div className="document-grid">{visibleDocuments.length ? visibleDocuments.map((document, index) => <article className="document-card" data-reveal key={document.id}><div><div className="document-card-title"><span className="pdf-icon"><span className="material-symbols-outlined">picture_as_pdf</span></span><div><h3>{document.filename}</h3><p>Uploaded {new Date(document.updatedAt).toLocaleDateString()}</p></div></div><div className="summary-block"><p>{documentSummaries[index % documentSummaries.length]}</p></div></div><div className="card-actions"><button className="primary-button" onClick={() => goTo(`/documents/${document.id}`)}>Open Workspace <span className="material-symbols-outlined">arrow_forward</span></button><button className="round-action" onClick={() => void openShare(document)} aria-label={`Share ${document.filename}`}><span className="material-symbols-outlined">share</span></button></div></article>) : <div className="empty-state"><strong>Your library is ready.</strong><span>Upload a PDF to start reviewing.</span></div>}</div>
     </section>
     {message && <p className="toast-message" role="status">{message}</p>}{error && <p className="toast-error" role="alert">{error}</p>}
     {selected && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><section className="share-modal"><button className="modal-close" onClick={() => setSelected(null)} aria-label="Close"><span className="material-symbols-outlined">close</span></button><p className="eyebrow">SHARE DOCUMENT</p><h2>{selected.filename}</h2><p className="subtle">The invitee must verify the invited email before access is granted.</p><form onSubmit={createShare} className="share-form"><label>Name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Alice Morgan" /></label><label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="alice@firm.com" /></label><button className="primary-button" type="submit">Send invitation</button></form><div className="share-list">{shares.map((share) => <div className="share-row" key={share.id}><span><strong>{share.inviteeName}</strong><small>{share.inviteeEmail}</small></span><span className={`status status-${share.status.toLowerCase()}`}>{share.status}</span><button onClick={() => void api(`/api/documents/${selected.id}/shares/${share.id}`, { method: 'DELETE' }).then(() => void openShare(selected))}>Revoke</button></div>)}</div></section></div>}

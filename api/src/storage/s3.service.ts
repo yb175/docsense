@@ -31,12 +31,6 @@ export async function downloadPdf(storageKey: string): Promise<{ body: ReadableS
   return { body: result.Body.transformToWebStream() as ReadableStream<Uint8Array>, contentType: result.ContentType };
 }
 
-export async function downloadPdfBytes(storageKey: string): Promise<Buffer> {
-  const result = await client.send(new GetObjectCommand({ Bucket: env.AWS_S3_BUCKET, Key: storageKey }));
-  if (!result.Body) throw new Error('Stored document has no content');
-  return Buffer.from(await result.Body.transformToByteArray());
-}
-
 export async function deleteObject(storageKey: string): Promise<void> {
   await client.send(new DeleteObjectCommand({
     Bucket: env.AWS_S3_BUCKET,
