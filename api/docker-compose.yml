@@ -15,17 +15,58 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Local development capture inbox for verification emails.
+  # UI: http://localhost:8025  API: http://localhost:8025/api/v1/messages
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/docsense
-      PORT: 3000
       NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/docsense
+      REDIS_URL: redis://redis:6379
+      # Defaults to Mailpit locally. Set SMTP_HOST/PORT/USER/PASS in .env for real delivery.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-Docsense <no-reply@docsense.local>}
     ports:
       - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
 
 volumes:
   postgres-data:
+  redis-data:
