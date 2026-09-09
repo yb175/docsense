@@ -17,11 +17,14 @@ export function App() {
 
   useEffect(() => {
     const onNavigate = () => setRoute(getRoute());
+    const onLogout = () => setHasValidToken(false);
     window.addEventListener('popstate', onNavigate);
     window.addEventListener('hashchange', onNavigate);
+    window.addEventListener('docsense:logout', onLogout);
     return () => {
       window.removeEventListener('popstate', onNavigate);
       window.removeEventListener('hashchange', onNavigate);
+      window.removeEventListener('docsense:logout', onLogout);
     };
   }, []);
 
