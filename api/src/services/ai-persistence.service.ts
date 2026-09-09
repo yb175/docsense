@@ -39,6 +39,23 @@ export async function listConversationMessages(documentId: string, conversationI
   });
 }
 
+export async function appendCompletedTurn(input: {
+  documentId: string;
+  conversationId: string;
+  question: string;
+  answer: string;
+}) {
+  return prisma.$transaction(async (transaction) => {
+    const conversation = await transaction.conversation.findFirst({ where: { id: input.conversationId, documentId: input.documentId }, select: { id: true } });
+    if (!conversation) throw badRequest('Conversation does not belong to this document');
+    await transaction.message.createMany({ data: [
+      { conversationId: input.conversationId, role: MessageRole.USER, content: input.question },
+      { conversationId: input.conversationId, role: MessageRole.ASSISTANT, content: input.answer },
+    ] });
+    await transaction.conversation.update({ where: { id: conversation.id }, data: {} });
+  });
+}
+
 export async function appendMessage(input: {
   documentId: string;
   conversationId: string;

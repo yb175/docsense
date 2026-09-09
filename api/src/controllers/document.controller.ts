@@ -73,10 +73,13 @@ export async function uploadDocument(c: Context<AppEnv>) {
   });
   const started = await startDocumentProcessing(document.id);
   if (!started) {
-    await removeDocument(document.id);
-    throw new Error(`Unable to start processing document ${document.id}`);
+    const current = await prisma.document.findUnique({ where: { id: document.id }, select: { processingStatus: true } });
+    if (current?.processingStatus !== 'PROCESSING') {
+      await removeDocument(document.id);
+      throw new Error(`Unable to start processing document ${document.id}`);
+    }
   }
   console.info(`[ai:upload] stored document=${document.id} status=PROCESSING`);
-  void processDocument(document.id, bytes);
+  if (started) void processDocument(document.id, bytes);
   return c.json({ ...document, processingStatus: 'PROCESSING' }, 201);
 }

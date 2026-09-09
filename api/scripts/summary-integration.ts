@@ -11,13 +11,13 @@ const documentId = '00000000-0000-4000-8000-000000000022';
 
 const chunkModel: SummaryModel = {
   async invoke(messages) {
-    assert.match(String(messages.at(-1)?.content), /Revenue was \$10 million\.|The contract renews annually\./);
+    assert.match(JSON.stringify(messages.at(-1)?.content), /Revenue was \$10 million\.|The contract renews annually\./);
     return { content: 'The supplied chunk states a grounded fact.' };
   },
 };
 const finalModel: SummaryModel = {
   async invoke(messages) {
-    assert.match(String(messages.at(-1)?.content), /The supplied chunk states a grounded fact\./);
+    assert.match(JSON.stringify(messages.at(-1)?.content), /The supplied chunk states a grounded fact\./);
     return { content: 'The document describes a grounded agreement. It includes the supplied commercial terms. It also defines the relevant obligations.' };
   },
 };

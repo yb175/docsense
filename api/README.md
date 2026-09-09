@@ -61,6 +61,8 @@ npm run dev
 
 The local `.env.example` values point the host-run API at `localhost`. The Docker Compose API service overrides internal service addresses with `db`, `redis`, and `mailpit`.
 
+Database-backed AI integration checks require `NODE_ENV=test` and a dedicated database whose name includes `test` (for example, `docsense_test`). They refuse to run against the application database.
+
 ## Authentication endpoints
 
 - `POST /auth/signup` — creates an unverified user and sends a six-digit email OTP

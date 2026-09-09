@@ -33,6 +33,10 @@ function sentenceCount(text: string): number {
   return text.match(/[^.!?]+[.!?]+(?=\s|$)/gu)?.length ?? 0;
 }
 
+const MAX_CHUNK_SUMMARY_CHARS = 1200;
+const MAX_REDUCTION_ITEMS = 20;
+const SUMMARY_CONCURRENCY = 4;
+
 async function invokePrompt(model: SummaryModel, system: string, input: string): Promise<string> {
   const prompt = ChatPromptTemplate.fromMessages([
     ['system', system],
@@ -41,22 +45,33 @@ async function invokePrompt(model: SummaryModel, system: string, input: string):
   const response = await model.invoke(await prompt.formatMessages({ input }));
   const text = contentText(response.content);
   if (!text) throw new SummaryGenerationError('Summary model returned empty content');
-  return text;
+  return text.slice(0, MAX_CHUNK_SUMMARY_CHARS);
 }
 
 export async function generateChunkSummary(model: SummaryModel, chunk: SummaryChunk): Promise<string> {
   try {
-    return await invokePrompt(model, chunkSummarySystemPrompt, chunk.text);
+    return await invokePrompt(model, chunkSummarySystemPrompt, `<document_data>${chunk.text}</document_data>`);
   } catch (error) {
     if (error instanceof SummaryGenerationError) throw error;
     throw new SummaryGenerationError('Unable to generate chunk summary', { cause: error });
   }
 }
 
+async function reduceSummaries(model: SummaryModel, summaries: string[]): Promise<string[]> {
+  const reduced: string[] = [];
+  for (let index = 0; index < summaries.length; index += MAX_REDUCTION_ITEMS) {
+    const input = summaries.slice(index, index + MAX_REDUCTION_ITEMS).map((summary, offset) => `Chunk ${index + offset + 1}:\n<document_data>${summary}</document_data>`).join('\n\n');
+    reduced.push(await invokePrompt(model, finalSummarySystemPrompt, input));
+  }
+  return reduced;
+}
+
 export async function generateFinalSummary(model: SummaryModel, chunkSummaries: string[]): Promise<string> {
   if (chunkSummaries.length === 0) throw new SummaryGenerationError('Cannot summarize a document without chunk summaries');
   try {
-    const input = chunkSummaries.map((summary, index) => `Chunk ${index + 1}:\n${summary}`).join('\n\n');
+    let summaries = chunkSummaries;
+    while (summaries.length > MAX_REDUCTION_ITEMS) summaries = await reduceSummaries(model, summaries);
+    const input = summaries.map((summary, index) => `Chunk ${index + 1}:\n<document_data>${summary}</document_data>`).join('\n\n');
     const summary = await invokePrompt(model, finalSummarySystemPrompt, input);
     const sentences = sentenceCount(summary);
     if (sentences < 3 || sentences > 5) {
@@ -76,8 +91,9 @@ export async function generateDocumentSummary(
 ): Promise<{ chunkSummaries: string[]; finalSummary: string }> {
   if (chunks.length === 0) throw new SummaryGenerationError('Cannot summarize a document without chunks');
   const chunkSummaries: string[] = [];
-  for (const chunk of chunks) {
-    chunkSummaries.push(await generateChunkSummary(chunkModel, chunk));
+  for (let index = 0; index < chunks.length; index += SUMMARY_CONCURRENCY) {
+    const batch = await Promise.all(chunks.slice(index, index + SUMMARY_CONCURRENCY).map((chunk) => generateChunkSummary(chunkModel, chunk)));
+    chunkSummaries.push(...batch);
   }
   return { chunkSummaries, finalSummary: await generateFinalSummary(finalModel, chunkSummaries) };
 }

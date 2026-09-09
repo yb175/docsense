@@ -18,7 +18,9 @@ async function json<T>(path: string): Promise<T> {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     log('request:failed', `${path} status=${response.status}`);
-    throw new Error(typeof data.error === 'string' ? data.error : 'Request failed');
+    const error = new Error(typeof data.error === 'string' ? data.error : 'Request failed') as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
   log('request:complete', `${path} status=${response.status}`);
   return data as T;
@@ -41,6 +43,7 @@ export async function streamChat(
   question: string,
   conversationId: string | undefined,
   onEvent: (event: SseEvent) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   log('chat:start', `document=${documentId} conversation=${conversationId ?? 'new'}`);
   const response = await fetch(`${API}/api/documents/${documentId}/chat`, {
@@ -48,6 +51,7 @@ export async function streamChat(
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify({ question, ...(conversationId ? { conversationId } : {}) }),
+    signal,
   });
   if (!response.ok || !response.body) {
     log('chat:failed', `document=${documentId} status=${response.status}`);

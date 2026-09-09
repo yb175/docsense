@@ -6,7 +6,7 @@ import { createChatModel, createFallbackChatModel, createIntentModel } from '../
 import { createEmbeddingModel, type EmbeddingModel } from '../ai/models/embeddings.js';
 import { buildDocumentChatContext } from '../ai/ai.service.js';
 import {
-  appendMessage,
+  appendCompletedTurn,
   createConversation,
   listConversationMessages,
 } from './ai-persistence.service.js';
@@ -109,13 +109,6 @@ export async function prepareChat(input: {
 }) {
   const conversation = await selectConversation(input);
   const previousMessages = await listConversationMessages(input.documentId, conversation.id);
-  await appendMessage({
-    documentId: input.documentId,
-    conversationId: conversation.id,
-    role: MessageRole.USER,
-    content: input.question,
-  });
-
   const conversationHistory: ConversationMessage[] = previousMessages.map((message) => ({
     role: message.role === MessageRole.USER ? 'user' : 'assistant',
     content: message.content,
@@ -180,7 +173,7 @@ export async function listAuthorizedChatMessages(input: {
   return listConversationMessages(input.documentId, input.conversationId);
 }
 
-export async function persistAssistantMessage(documentId: string, conversationId: string, content: string) {
-  if (!content.trim()) throw new Error('Cannot persist an empty assistant response');
-  return appendMessage({ documentId, conversationId, role: MessageRole.ASSISTANT, content });
+export async function persistCompletedTurn(documentId: string, conversationId: string, question: string, answer: string) {
+  if (!answer.trim()) throw new Error('Cannot persist an empty assistant response');
+  return appendCompletedTurn({ documentId, conversationId, question, answer });
 }

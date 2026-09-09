@@ -42,8 +42,9 @@ export async function processDocument(documentId: string, bytes: Uint8Array): Pr
     await generateAndPersistSummary(documentId);
     console.info(`[ai:pipeline] document=${documentId} status=COMPLETED`);
   } catch (error) {
+    await prisma.documentChunk.deleteMany({ where: { documentId } }).catch((cleanupError) => console.error(`[ai:pipeline] document=${documentId} failed-to-clean-chunks`, cleanupError));
     await prisma.document.updateMany({
-      where: { id: documentId, processingStatus: { not: DocumentProcessingStatus.COMPLETED } },
+      where: { id: documentId, processingStatus: DocumentProcessingStatus.PROCESSING },
       data: { processingStatus: DocumentProcessingStatus.FAILED },
     }).catch((updateError) => console.error(`[ai:pipeline] document=${documentId} failed-to-record-failure`, updateError));
     console.error(`[ai:pipeline] document=${documentId} status=FAILED`, error);
@@ -68,20 +69,36 @@ export async function embedAndStoreDocumentChunks(
 }
 
 export async function resumeDocumentProcessing(): Promise<void> {
+  const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
   const documents = await prisma.document.findMany({
-    where: { processingStatus: { in: [DocumentProcessingStatus.PENDING, DocumentProcessingStatus.PROCESSING] } },
+    where: {
+      OR: [
+        { processingStatus: DocumentProcessingStatus.PENDING },
+        { processingStatus: DocumentProcessingStatus.PROCESSING, updatedAt: { lt: staleBefore } },
+      ],
+    },
     select: { id: true, storageKey: true },
   });
   for (const document of documents) {
     if (activeDocuments.has(document.id)) continue;
-    await prisma.document.updateMany({
-      where: { id: document.id, processingStatus: DocumentProcessingStatus.PENDING },
+    const claimed = await prisma.document.updateMany({
+      where: {
+        id: document.id,
+        OR: [
+          { processingStatus: DocumentProcessingStatus.PENDING },
+          { processingStatus: DocumentProcessingStatus.PROCESSING, updatedAt: { lt: staleBefore } },
+        ],
+      },
       data: { processingStatus: DocumentProcessingStatus.PROCESSING },
     });
+    if (claimed.count !== 1) continue;
     void downloadPdfBytes(document.storageKey)
       .then((bytes) => processDocument(document.id, bytes))
       .catch(async (error) => {
-        await prisma.document.updateMany({ where: { id: document.id }, data: { processingStatus: DocumentProcessingStatus.FAILED } });
+        await prisma.document.updateMany({
+          where: { id: document.id, processingStatus: DocumentProcessingStatus.PROCESSING },
+          data: { processingStatus: DocumentProcessingStatus.FAILED },
+        });
         console.error(`[ai:pipeline] document=${document.id} status=FAILED resume`, error);
       });
   }

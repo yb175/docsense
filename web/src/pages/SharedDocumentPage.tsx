@@ -90,6 +90,8 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
   const [notice, setNotice] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const chatGeneration = useRef(0);
+  const chatAbort = useRef<AbortController | null>(null);
   const isOwner = accessKind === 'owner';
   const { comments, setComments, error: commentsError } = useComments(documentId);
   const onPdfError = useCallback((message: string) => setContentError(message), []);
@@ -139,11 +141,22 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
         log('pdf:ready', documentId);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Unable to access document';
+        const status = cause instanceof Error && 'status' in cause ? (cause as Error & { status?: number }).status : undefined;
         log('workspace:failed', documentId, message);
-        if (metadataLoaded) setContentError(`${message} Return to the dashboard and re-upload the PDF.`); else setAuthError(message);
+        if (status === 401 || status === 403) setAuthError(message);
+        else if (metadataLoaded) {
+          setSummaryStatus('FAILED');
+          setContentError(`${message} Please retry or return to the dashboard.`);
+        } else setAuthError(message);
       }
     })();
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => {
+      active = false;
+      chatGeneration.current += 1;
+      chatAbort.current?.abort();
+      chatAbort.current = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [documentId, analysisVersion]);
 
   useEffect(() => {
@@ -161,7 +174,11 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
         setContentError('');
         setAnalysisVersion((version) => version + 1);
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (!active) return;
+      setSummaryStatus('FAILED');
+      setContentError('Unable to check analysis status. Please retry or return to the dashboard.');
+    });
     const interval = window.setInterval(poll, 3000);
     return () => { active = false; window.clearInterval(interval); };
   }, [documentId, summaryStatus]);
@@ -178,27 +195,39 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
     setChatInput('');
     setNotice('');
     setIsChatLoading(true);
+    const generation = ++chatGeneration.current;
+    const controller = new AbortController();
+    chatAbort.current?.abort();
+    chatAbort.current = controller;
+    const userMessageId = crypto.randomUUID();
     const assistantMessageId = crypto.randomUUID();
-    setChatMessages((messages) => [...messages, { id: crypto.randomUUID(), from: 'you', text: value }, { id: assistantMessageId, from: 'ai', text: '' }]);
+    setChatMessages((messages) => [...messages, { id: userMessageId, from: 'you', text: value }, { id: assistantMessageId, from: 'ai', text: '' }]);
     try {
       const nextConversationId = await streamChat(documentId, value, conversationId, (streamEvent) => {
+        if (generation !== chatGeneration.current || streamEvent.event === 'message.error') {
+          if (streamEvent.event === 'message.error') throw new Error(typeof streamEvent.data.message === 'string' ? streamEvent.data.message : 'Chat generation failed');
+          return;
+        }
+        if (streamEvent.event === 'message.start' && typeof streamEvent.data.conversationId === 'string') {
+          setConversationId(streamEvent.data.conversationId);
+        }
         if (streamEvent.event === 'message.token' && typeof streamEvent.data.token === 'string') {
           setChatMessages((messages) => {
             const next = [...messages];
-            const lastIndex = next.length - 1;
-            const last = next[lastIndex];
-            if (last?.from === 'ai') next[lastIndex] = { ...last, text: last.text + streamEvent.data.token };
+            const index = next.findIndex((message) => message.id === assistantMessageId);
+            const last = next[index];
+            if (last?.from === 'ai') next[index] = { ...last, text: last.text + streamEvent.data.token };
             return next;
           });
         }
-        if (streamEvent.event === 'message.error') throw new Error(typeof streamEvent.data.message === 'string' ? streamEvent.data.message : 'Chat generation failed');
-      });
+      }, controller.signal);
       if (nextConversationId) setConversationId(nextConversationId);
     } catch (cause) {
-      setChatMessages((messages) => messages.filter((message) => message.id !== assistantMessageId));
-      setNotice(cause instanceof Error ? cause.message : 'Unable to answer this question');
+      if (generation !== chatGeneration.current) return;
+      setChatMessages((messages) => messages.filter((message) => message.id !== userMessageId && message.id !== assistantMessageId));
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setNotice(cause instanceof Error ? cause.message : 'Unable to answer this question');
     } finally {
-      setIsChatLoading(false);
+      if (generation === chatGeneration.current) setIsChatLoading(false);
     }
   };
   useEffect(() => {

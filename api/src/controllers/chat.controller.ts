@@ -6,7 +6,7 @@ import type { Context } from 'hono';
 import type { ChatInput } from '../middleware/validation.js';
 import type { AppEnv } from '../types/index.js';
 import { authorizeDocument } from '../services/share.service.js';
-import { isConciseChatResponse, listAuthorizedChatMessages, listAuthorizedConversations, persistAssistantMessage, prepareChat } from '../services/chat.service.js';
+import { isConciseChatResponse, listAuthorizedChatMessages, listAuthorizedConversations, persistCompletedTurn, prepareChat } from '../services/chat.service.js';
 
 const event = (type: string, payload: unknown) => ({ event: type, data: JSON.stringify(payload) });
 
@@ -66,7 +66,7 @@ export async function chatHandler(c: Context<AppEnv>) {
       if (!isConciseChatResponse(answer)) {
         throw new Error('The assistant returned an answer outside the required 3–5 sentence limit. Please try again.');
       }
-      await persistAssistantMessage(documentId, prepared.conversationId, answer);
+      await persistCompletedTurn(documentId, prepared.conversationId, input.question, answer);
       await stream.writeSSE(event('message.token', { token: answer }));
       await stream.writeSSE(event('message.complete', {
         conversationId: prepared.conversationId,

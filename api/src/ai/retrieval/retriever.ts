@@ -32,18 +32,20 @@ export async function retrieveDocumentChunks(input: {
 
   const rows = await prisma.$queryRaw<Array<Omit<RetrievedChunk, 'similarity'> & { similarity: number }>>`
     SELECT
-      "id",
-      "documentId",
-      "chunkIndex",
-      "text",
-      "pageStart",
-      "pageEnd",
-      1 - ("embedding" <=> ${vector}::vector) AS "similarity"
-    FROM "document_chunks"
-    WHERE "documentId" = ${input.documentId}::uuid
-      AND "embedding" IS NOT NULL
-      AND 1 - ("embedding" <=> ${vector}::vector) >= ${minSimilarity}
-    ORDER BY "embedding" <=> ${vector}::vector ASC
+      chunks."id",
+      chunks."documentId",
+      chunks."chunkIndex",
+      chunks."text",
+      chunks."pageStart",
+      chunks."pageEnd",
+      1 - (chunks."embedding" <=> ${vector}::vector) AS "similarity"
+    FROM "document_chunks" AS chunks
+    INNER JOIN "Document" AS documents ON documents."id" = chunks."documentId"
+    WHERE chunks."documentId" = ${input.documentId}::uuid
+      AND documents."processingStatus" = 'COMPLETED'
+      AND chunks."embedding" IS NOT NULL
+      AND 1 - (chunks."embedding" <=> ${vector}::vector) >= ${minSimilarity}
+    ORDER BY chunks."embedding" <=> ${vector}::vector ASC
     LIMIT ${topK}
   `;
   return rows.map((row) => ({ ...row, similarity: Number(row.similarity) }));
