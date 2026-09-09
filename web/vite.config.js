@@ -15,6 +15,11 @@ export default defineConfig({
         changeOrigin: false,
         cookieDomainRewrite: 'localhost',
       },
+      '/ws': {
+        target: 'ws://localhost:3000',
+        ws: true,
+        changeOrigin: false,
+      },
     },
   },
 });
