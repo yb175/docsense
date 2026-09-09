@@ -124,6 +124,14 @@ npm run test:ai:vlm-loader
 
 They verify that normal pages bypass Gemini, poor pages receive page-specific image input, unified text retains page metadata, and provider failures are surfaced.
 
+LangChain chunking checks can be run without external providers:
+
+```bash
+npm run test:ai:splitter
+```
+
+They cover deterministic ordering, chunk size/overlap, page metadata, empty input, and invalid splitter configuration.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash
