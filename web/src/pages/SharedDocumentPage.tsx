@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { goTo } from '../utils/navigation';
 import { API } from '../config';
 import { PdfViewer } from '../components/PdfViewer';
-import { workspaceSummary } from '../mocks/workspace.mock';
+import { getConversationMessages, getSummary, streamChat } from '../services/chatApi';
 import { commentBody, insertComment, useComments } from '../hooks/useComments';
 import type { Comment, CommentContent, CommentSpan } from '../hooks/useComments';
 
@@ -15,7 +15,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 type Document = { filename: string };
-type ChatMessage = { from: 'you' | 'ai'; text: string };
+const log = (step: string, documentId: string, detail = '') => console.info(`[docsense:web] ${step} document=${documentId}${detail ? ` ${detail}` : ''}`);
+type ChatMessage = { id: string; from: 'you' | 'ai'; text: string };
 
 function RichText({ content }: { content: CommentContent }) {
   return <>{content.blocks.map((block, index) => block.type === 'bulletList'
@@ -48,6 +49,26 @@ function CommentCard({ comment, onReply }: { comment: Comment; onReply: (comment
   </article>;
 }
 
+function AssistantEmptyState({ onQuestion, active }: { onQuestion: (question: string) => void; active: boolean }) {
+  return <div className={`assistant-empty-state${active ? ' is-active' : ''}`}>
+    <div className="intelligence-orbit" aria-hidden="true"><span className="orbit-dot orbit-dot-one" /><span className="orbit-dot orbit-dot-two" /><span className="orbit-dot orbit-dot-three" /><div className="intelligence-mark"><span className="material-symbols-outlined">auto_awesome</span></div></div>
+    <strong>{active ? 'Analyzing your document' : 'Ready to analyze your document'}</strong>
+    <span>{active ? 'The assistant is preparing a grounded response.' : 'Ask anything about the content, clauses, or key details.'}</span>
+    {!active && <div className="suggested-questions" aria-label="Suggested questions">
+      {['Summarize this document', 'What are the key risks?', 'Explain this document simply'].map((question) => <button type="button" key={question} onClick={() => onQuestion(question)}>{question}</button>)}
+    </div>}
+  </div>;
+}
+
+function AnalysisGate({ failed, onReturn }: { failed: boolean; onReturn: () => void }) {
+  return <main className="analysis-gate" aria-busy={!failed}>
+    <div className="analysis-gate-card">
+      <div className="analysis-gate-brand"><span className="brand-mark-small">D</span><span>DocSense</span></div>
+      {failed ? <><p className="eyebrow">ANALYSIS INTERRUPTED</p><h1>We couldn’t prepare this PDF.</h1><p className="subtle">Return to your dashboard and re-upload the document to try again.</p><button className="primary-button" onClick={onReturn}>Return to dashboard</button></> : <div className="skeleton-stack" aria-label="Preparing document intelligence"><span className="skeleton-line skeleton-kicker" /><span className="skeleton-line skeleton-title" /><span className="skeleton-line skeleton-copy" /><span className="skeleton-line skeleton-copy short" /><div className="skeleton-panel"><span className="skeleton-line" /><span className="skeleton-line short" /><span className="skeleton-line" /></div></div>}
+    </div>
+  </main>;
+}
+
 export function SharedDocumentPage({ documentId }: { documentId: string }) {
   const [document, setDocument] = useState<Document | null>(null);
   const [accessKind, setAccessKind] = useState<'owner' | 'guest'>('guest');
@@ -56,13 +77,16 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
   const [authError, setAuthError] = useState('');
   const [tab, setTab] = useState<'chat' | 'comments'>('chat');
   const [summaryOpen, setSummaryOpen] = useState(true);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryStatus, setSummaryStatus] = useState('PENDING');
+  const [analysisVersion, setAnalysisVersion] = useState(0);
   const [chatInput, setChatInput] = useState('');
+  const chatInputRef = useRef<HTMLInputElement>(null);
+  const [conversationId, setConversationId] = useState<string>();
+  const [isChatLoading, setIsChatLoading] = useState(false);
   const [commentInput, setCommentInput] = useState('');
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { from: 'you', text: 'Does Section 14.2 allow Stripe to terminate for convenience without cause?' },
-    { from: 'ai', text: 'According to Section 14.2, termination for convenience requires 90 days prior written notice and settlement of outstanding milestone fees.' },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [notice, setNotice] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -75,29 +99,91 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
     void (async () => {
       let metadataLoaded = false;
       try {
+        log('workspace:start', documentId);
         const data = await request<{ document: Document; access: 'owner' | 'guest' }>(`/api/documents/${documentId}`);
         metadataLoaded = true;
         setDocument(data.document);
         setAccessKind(data.access);
+        log('summary:start', documentId);
+        const summaryResult = await getSummary(documentId);
+        const status = summaryResult.processingStatus ?? 'PENDING';
+        setSummary(summaryResult.summary);
+        setSummaryStatus(status);
+        log('summary:status', documentId, `status=${status} visible=${Boolean(summaryResult.summary)}`);
+        if (status === 'FAILED') throw new Error('AI analysis failed. Please re-upload this PDF.');
+        if (status !== 'COMPLETED' || !summaryResult.summary) {
+          log('pdf:deferred', documentId, `status=${status}`);
+          setContentError('AI analysis is still processing. The PDF will open when its summary is ready.');
+          return;
+        }
+        const history = await getConversationMessages(documentId);
+        setConversationId(history.conversationId);
+        setChatMessages(history.messages.map((message) => ({ id: message.id, from: message.role === 'USER' ? 'you' : 'ai', text: message.content })));
+        log('pdf:start', documentId);
         const response = await fetch(`${API}/api/documents/${documentId}/content`, { credentials: 'include' });
         if (!response.ok) throw new Error('Unable to retrieve PDF from storage');
         objectUrl = URL.createObjectURL(await response.blob());
         setContentUrl(objectUrl);
+        log('pdf:ready', documentId);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Unable to access document';
-        if (metadataLoaded) setContentError(message); else setAuthError(message);
+        log('workspace:failed', documentId, message);
+        if (metadataLoaded) setContentError(`${message} Return to the dashboard and re-upload the PDF.`); else setAuthError(message);
       }
     })();
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [documentId]);
+  }, [documentId, analysisVersion]);
 
-  const sendChat = (event: FormEvent) => {
+  useEffect(() => {
+    if (summaryStatus !== 'PENDING' && summaryStatus !== 'PROCESSING') return;
+    const interval = window.setInterval(() => {
+      void getSummary(documentId).then((result) => {
+        const status = result.processingStatus ?? 'PENDING';
+        if (status === 'COMPLETED' && result.summary) {
+          setSummary(result.summary);
+          setSummaryStatus(status);
+          setContentError('');
+          setAnalysisVersion((version) => version + 1);
+        }
+      }).catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [documentId, summaryStatus]);
+
+  const askSuggestedQuestion = (question: string) => {
+    setChatInput(question);
+    chatInputRef.current?.focus();
+  };
+
+  const sendChat = async (event: FormEvent) => {
     event.preventDefault();
     const value = chatInput.trim();
-    if (!value) return;
-    setChatMessages((messages) => [...messages, { from: 'you', text: value }]);
+    if (!value || isChatLoading) return;
     setChatInput('');
-    setNotice('AI response is mocked until the chat API is connected.');
+    setNotice('');
+    setIsChatLoading(true);
+    const assistantMessageId = crypto.randomUUID();
+    setChatMessages((messages) => [...messages, { id: crypto.randomUUID(), from: 'you', text: value }, { id: assistantMessageId, from: 'ai', text: '' }]);
+    try {
+      const nextConversationId = await streamChat(documentId, value, conversationId, (streamEvent) => {
+        if (streamEvent.event === 'message.token' && typeof streamEvent.data.token === 'string') {
+          setChatMessages((messages) => {
+            const next = [...messages];
+            const lastIndex = next.length - 1;
+            const last = next[lastIndex];
+            if (last?.from === 'ai') next[lastIndex] = { ...last, text: last.text + streamEvent.data.token };
+            return next;
+          });
+        }
+        if (streamEvent.event === 'message.error') throw new Error(typeof streamEvent.data.message === 'string' ? streamEvent.data.message : 'Chat generation failed');
+      });
+      if (nextConversationId) setConversationId(nextConversationId);
+    } catch (cause) {
+      setChatMessages((messages) => messages.filter((message) => message.id !== assistantMessageId));
+      setNotice(cause instanceof Error ? cause.message : 'Unable to answer this question');
+    } finally {
+      setIsChatLoading(false);
+    }
   };
   useEffect(() => {
     const syncFullscreen = () => setIsFullscreen(window.document.fullscreenElement === workspaceRef.current);
@@ -109,6 +195,9 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
     if (window.document.fullscreenElement) await window.document.exitFullscreen();
     else await workspaceRef.current?.requestFullscreen();
   };
+
+  const lastChatMessage = chatMessages.at(-1);
+  const showAssistantAtmosphere = chatMessages.length === 0 || lastChatMessage?.from === 'you' || (lastChatMessage?.from === 'ai' && !lastChatMessage.text);
 
   const addComment = async (event: FormEvent) => {
     event.preventDefault();
@@ -129,6 +218,7 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
   };
 
   if (authError) return <main className="access-page"><section className="access-card"><span className="brand-mark-small">D</span><p className="eyebrow">ACCESS RESTRICTED</p><h1>{authError}</h1><p className="subtle">If you received an invitation link, please verify your email first.</p><button className="primary-button" onClick={() => goTo('/')}>Return to Home</button></section></main>;
+  if (!document || summaryStatus !== 'COMPLETED' || !summary) return <AnalysisGate failed={summaryStatus === 'FAILED'} onReturn={() => goTo(isOwner ? '/authenticated' : '/')} />;
 
   return <main className="workspace-shell">
     <header className="clay-header workspace-header">
@@ -142,12 +232,12 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
       <div className="workspace-grid-modern" ref={workspaceRef}>
         <section className="pdf-panel">
           <div className="pdf-toolbar"><div className="document-meta"><span className="pdf-icon large"><span className="material-symbols-outlined">picture_as_pdf</span></span><strong>{document?.filename ?? 'Loading document…'}</strong></div></div>
-          <div className="summary-ribbon"><button aria-expanded={summaryOpen} onClick={() => setSummaryOpen((value) => !value)}><span><span className="material-symbols-outlined">auto_awesome</span>AI Summary</span><span className="material-symbols-outlined">{summaryOpen ? 'expand_less' : 'expand_more'}</span></button>{summaryOpen && <p>{workspaceSummary}</p>}</div>
-          <div className="pdf-stage">{contentError ? <div className="empty-state pdf-error"><strong>Unable to render PDF preview</strong><span>{contentError}</span></div> : contentUrl ? <PdfViewer url={contentUrl} filename={document?.filename ?? 'PDF'} onError={onPdfError} isFullscreen={isFullscreen} onToggleFullscreen={() => void toggleWorkspaceFullscreen()} /> : <div className="empty-state pdf-loading-panel"><span>Loading secure document stream…</span></div>}</div>
+          <div className="summary-ribbon"><button aria-expanded={summaryOpen} onClick={() => setSummaryOpen((value) => !value)}><span><span className="material-symbols-outlined">auto_awesome</span>AI Summary</span><span className="material-symbols-outlined">{summaryOpen ? 'expand_less' : 'expand_more'}</span></button>{summaryOpen && (summary ? <p>{summary}</p> : <div className="summary-buffer" role="status" aria-live="polite"><span>{summaryStatus === 'FAILED' ? 'Summary unavailable. Please re-upload the PDF.' : 'Building grounded summary…'}</span><i /><i /><i /></div>)}</div>
+          <div className="pdf-stage">{contentError ? <div className="empty-state pdf-error"><strong>{summaryStatus === 'PENDING' ? 'Preparing document intelligence' : 'Unable to open PDF preview'}</strong><span>{contentError}</span><button className="primary-button" onClick={() => goTo(isOwner ? '/authenticated' : '/')}>{isOwner ? 'Return to dashboard' : 'Return to home'}</button></div> : contentUrl ? <PdfViewer url={contentUrl} filename={document?.filename ?? 'PDF'} onError={onPdfError} isFullscreen={isFullscreen} onToggleFullscreen={() => void toggleWorkspaceFullscreen()} /> : <div className="empty-state pdf-loading-panel"><span>Loading secure document stream…</span></div>}</div>
         </section>
         <aside className="inspector-panel">
           <div className="inspector-tabs" role="tablist" aria-label="Document collaboration"><button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}><span className="material-symbols-outlined">auto_awesome</span>AI Assistant</button><button role="tab" aria-selected={tab === 'comments'} className={tab === 'comments' ? 'active comments' : ''} onClick={() => setTab('comments')}><span className="material-symbols-outlined">forum</span>Comments <b>{comments.length}</b></button></div>
-          {tab === 'chat' ? <div className="chat-pane"><div className="chat-feed">{chatMessages.map((message, index) => <div className={`chat-message ${message.from}`} key={`${message.text}-${index}`}>{message.from === 'ai' && <strong><span className="material-symbols-outlined">bolt</span>DocSense Neural Analyst</strong>}<p>{message.text}</p>{message.from === 'ai' && <small>Confidence 99.4% · Mock response</small>}</div>)}<div className="typing-state"><i /><i /><i />Ready to answer questions about this PDF</div></div><form className="chat-form" onSubmit={sendChat}><span className="material-symbols-outlined">smart_toy</span><input aria-label="Ask about this PDF" value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about this PDF…" /><button aria-label="Send message"><span className="material-symbols-outlined">arrow_upward</span></button></form></div> : <div className="comments-pane">{commentsError && <p className="comments-error" role="alert">{commentsError}</p>}<div className="comments-list">{comments.map((comment) => <div className="comment-thread" key={comment.id}><CommentCard comment={comment} onReply={setReplyTo} />{comment.replies.map((reply) => <CommentCard key={reply.id} comment={reply} onReply={setReplyTo} />)}</div>)}</div><form className={`comment-form${replyTo ? ' has-reply' : ''}`} onSubmit={(event) => void addComment(event)}>{replyTo && <div className="reply-context"><div className="reply-context-heading"><span><span className="material-symbols-outlined">reply</span>Replying to {replyTo.author.name ?? 'Guest reviewer'}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply">×</button></div><p>“{commentPreview(replyTo)}”</p></div>}<div className="comment-input-row"><input aria-label={replyTo ? 'Add a reply' : 'Add a document comment'} value={commentInput} onChange={(event) => setCommentInput(event.target.value)} placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'} /><button aria-label={replyTo ? 'Add reply' : 'Add comment'}><span className="material-symbols-outlined">{replyTo ? 'reply' : 'add_comment'}</span></button></div></form></div>}
+          {tab === 'chat' ? <div className="chat-pane"><div className="chat-feed">{chatMessages.map((message) => (message.from === 'you' || message.text) && <div className={`chat-message ${message.from}`} key={message.id}>{message.from === 'ai' && <strong><span className="material-symbols-outlined">bolt</span>DocSense Neural Analyst</strong>}<p>{message.text}</p>{message.from === 'ai' && message.text && <small>Grounded in this document</small>}</div>)}{showAssistantAtmosphere && <AssistantEmptyState active={isChatLoading} onQuestion={askSuggestedQuestion} />}<div className="typing-state"><i /><i /><i />{isChatLoading ? 'Generating grounded answer…' : 'Ready to answer questions about this PDF'}</div></div><form className="chat-form" onSubmit={sendChat}><span className="material-symbols-outlined assistant-mark" aria-hidden="true">auto_awesome</span><input ref={chatInputRef} aria-label="Ask about this PDF" value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about this PDF…" /><button aria-label="Send message" disabled={isChatLoading}><span className="material-symbols-outlined">arrow_upward</span></button></form></div> : <div className="comments-pane">{commentsError && <p className="comments-error" role="alert">{commentsError}</p>}<div className="comments-list">{comments.map((comment) => <div className="comment-thread" key={comment.id}><CommentCard comment={comment} onReply={setReplyTo} />{comment.replies.map((reply) => <CommentCard key={reply.id} comment={reply} onReply={setReplyTo} />)}</div>)}</div><form className={`comment-form${replyTo ? ' has-reply' : ''}`} onSubmit={(event) => void addComment(event)}>{replyTo && <div className="reply-context"><div className="reply-context-heading"><span><span className="material-symbols-outlined">reply</span>Replying to {replyTo.author.name ?? 'Guest reviewer'}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply">×</button></div><p>“{commentPreview(replyTo)}”</p></div>}<div className="comment-input-row"><input aria-label={replyTo ? 'Add a reply' : 'Add a document comment'} value={commentInput} onChange={(event) => setCommentInput(event.target.value)} placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'} /><button aria-label={replyTo ? 'Add reply' : 'Add comment'}><span className="material-symbols-outlined">{replyTo ? 'reply' : 'add_comment'}</span></button></div></form></div>}
         </aside>
       </div>
     </section>

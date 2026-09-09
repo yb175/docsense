@@ -33,6 +33,8 @@ const Schema = z.object({
   AI_VISION_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
   AI_CHUNK_SUMMARY_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
   AI_SUMMARY_MODEL: z.string().min(1).default('gpt-4.1-mini'),
+  AI_CHAT_MODEL: z.string().min(1).default('gpt-4.1-mini'),
+  AI_FALLBACK_CHAT_MODEL: z.string().min(1).default('gemini-2.5-flash'),
   AI_EMBEDDING_MODEL: z.string().min(1).default('gemini-embedding-001'),
 });
 

@@ -9,6 +9,8 @@ export const chunkSummarySystemPrompt = `You summarize one grounded PDF chunk.
 
 Use only the supplied chunk text. Preserve important names, dates, numbers, obligations, and conclusions. Do not invent facts, fill gaps, or mention internal processing. Return one concise paragraph in plain text.`;
 
-export const finalSummarySystemPrompt = `You write the final summary of a PDF from supplied chunk summaries.
+export const finalSummarySystemPrompt = `You write a compact executive summary of a PDF from the supplied chunk summaries.
 
-Use only the supplied summaries. Preserve important names, dates, numbers, obligations, and conclusions. Do not invent unsupported facts or mention internal pipeline details. Return exactly 3 to 5 concise sentences in plain text.`;
+Use only the supplied summaries. Preserve the most important names, dates, numbers, obligations, conclusions, and document purpose. Do not invent unsupported facts, mention internal pipeline details, repeat words or ideas, use headings, use bullets, or explain the document line by line.
+
+Return exactly 3 to 5 short, complete sentences in plain text. Each sentence should communicate one useful high-level point. Prefer clear, direct language and keep the whole summary concise enough to scan in a document card. Before returning, silently verify that the response has 3 to 5 sentences and contains no headings, bullets, repetition, or unsupported claims.`;

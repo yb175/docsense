@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
+import type { BaseMessage } from '@langchain/core/messages';
 
-import { buildRagContext } from '../src/ai/context/context-builder.js';
+import { buildRagContext, classifyChatIntent } from '../src/ai/context/context-builder.js';
 import type { RetrievedChunk } from '../src/ai/retrieval/retriever.js';
+
+const intentModel = { async invoke(messages: BaseMessage[]) {
+  const question = String(messages.at(-1)?.content ?? '');
+  return { content: question.includes('overview') ? '{"intent":"document_summary"}' : '{"intent":"explain_again"}' };
+} };
+assert.equal(await classifyChatIntent(intentModel, 'Give me an overview.'), 'document_summary');
+assert.equal(await classifyChatIntent(intentModel, 'Explain that again.'), 'explain_again');
+await assert.rejects(() => classifyChatIntent({ async invoke() { return { content: 'not-json' }; } }, 'question'), SyntaxError);
 
 const chunks: RetrievedChunk[] = [
   { id: '1', documentId: 'doc', chunkIndex: 0, text: 'Revenue was $10 million.', pageStart: 2, pageEnd: 2, similarity: 0.91 },

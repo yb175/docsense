@@ -159,6 +159,22 @@ npm run test:ai:context:live
 
 The unit checks validate source/page formatting, conversation trimming, no-context behavior, and prompt grounding. The live check uses the configured Gemini embedding key once for chunk embeddings and once for query retrieval, then cleans up its database fixtures.
 
+Chat endpoint:
+
+```text
+POST /api/documents/:documentId/chat
+```
+
+It returns SSE events (`message.start`, `message.token`, `message.complete`, and `message.error`) and authorizes owners or verified guest sessions before retrieval.
+
+Chat streaming checks:
+
+```bash
+npm run test:ai:chat
+```
+
+They cover token extraction, primary-provider streaming, pre-token fallback, and prevention of silently merging fallback output after partial primary output.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash

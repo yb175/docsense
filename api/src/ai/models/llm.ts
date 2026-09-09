@@ -12,11 +12,45 @@ export function createChunkSummaryModel() {
   });
 }
 
-export function createFinalSummaryModel() {
-  if (!env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required for final summaries');
+export function createChatModel() {
+  if (!env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required for chat');
   return new ChatOpenAI({
     apiKey: env.OPENAI_API_KEY,
-    model: env.AI_SUMMARY_MODEL,
+    model: env.AI_CHAT_MODEL,
+    temperature: 0,
+  });
+}
+
+export function createIntentModel() {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is required for intent classification');
+  return new ChatGoogleGenerativeAI({
+    apiKey: env.GEMINI_API_KEY,
+    model: env.AI_FALLBACK_CHAT_MODEL,
+    temperature: 0,
+  });
+}
+
+export function createFallbackChatModel() {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is required for chat fallback');
+  return new ChatGoogleGenerativeAI({
+    apiKey: env.GEMINI_API_KEY,
+    model: env.AI_FALLBACK_CHAT_MODEL,
+    temperature: 0,
+  });
+}
+
+export function createFinalSummaryModel() {
+  if (env.OPENAI_API_KEY) {
+    return new ChatOpenAI({
+      apiKey: env.OPENAI_API_KEY,
+      model: env.AI_SUMMARY_MODEL,
+      temperature: 0,
+    });
+  }
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is required for final summaries');
+  return new ChatGoogleGenerativeAI({
+    apiKey: env.GEMINI_API_KEY,
+    model: env.AI_FALLBACK_CHAT_MODEL,
     temperature: 0,
   });
 }

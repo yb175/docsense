@@ -9,6 +9,7 @@ export async function generateAndPersistDocumentSummary(input: {
   chunkModel?: SummaryModel;
   finalModel?: SummaryModel;
 }) {
+  console.info(`[ai:summary] document=${input.documentId} status=PROCESSING`);
   await prisma.document.update({
     where: { id: input.documentId },
     data: { processingStatus: DocumentProcessingStatus.PROCESSING },
@@ -20,6 +21,7 @@ export async function generateAndPersistDocumentSummary(input: {
       orderBy: { chunkIndex: 'asc' },
       select: { text: true, pageStart: true, pageEnd: true },
     });
+    console.info(`[ai:summary] document=${input.documentId} chunks=${chunks.length} generating`);
     const result = await generateDocumentSummary(
       input.chunkModel ?? createChunkSummaryModel(),
       input.finalModel ?? createFinalSummaryModel(),
@@ -32,8 +34,10 @@ export async function generateAndPersistDocumentSummary(input: {
         processingStatus: DocumentProcessingStatus.COMPLETED,
       },
     });
+    console.info(`[ai:summary] document=${input.documentId} status=COMPLETED`);
     return result;
   } catch (error) {
+    console.error(`[ai:summary] document=${input.documentId} status=FAILED`, error);
     await prisma.document.update({
       where: { id: input.documentId },
       data: { processingStatus: DocumentProcessingStatus.FAILED },
