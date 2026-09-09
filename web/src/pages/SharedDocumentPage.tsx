@@ -3,12 +3,7 @@ import { goTo } from '../utils/navigation';
 
 const API = '';
 
-function getAuthHeaders(documentId?: string): Record<string, string> {
-  const token = localStorage.getItem('docsenseToken');
-  if (token) return { Authorization: `Bearer ${token}` };
-  // Per-document guest session stored in localStorage after OTP verification.
-  const guestSession = documentId ? localStorage.getItem(`guestSession:${documentId}`) : null;
-  if (guestSession) return { 'X-Guest-Session': guestSession };
+function getAuthHeaders(): Record<string, string> {
   return {};
 }
 
@@ -25,12 +20,12 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
   const [contentUrl, setContentUrl] = useState('');
   const [contentError, setContentError] = useState('');
   const [authError, setAuthError] = useState('');
-  const isOwner = Boolean(localStorage.getItem('docsenseToken'));
+  const isOwner = accessKind === 'owner';
 
   useEffect(() => {
     void (async () => {
       try {
-        const authHeader: Record<string, string> = getAuthHeaders(documentId);
+        const authHeader: Record<string, string> = getAuthHeaders();
         const data = await request<{ document: { filename: string }; access: 'owner' | 'guest' }>(`/api/documents/${documentId}`, { headers: authHeader });
         setDocument(data.document);
         setAccessKind(data.access);

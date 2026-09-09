@@ -104,15 +104,24 @@ export async function verifyGuestOtp(input: { token: string; email: string; otp:
   return { sessionId, maxAge: ttl, documentId: share.documentId };
 }
 
-export async function getGuestSession(sessionId: string | undefined) {
+export type GuestSession = { shareId: string; documentId: string; inviteeEmail: string; permissions: GuestPermission[]; expiresAt: string };
+
+export async function getGuestSession(sessionId: string | undefined): Promise<GuestSession | null> {
   if (!sessionId) return null;
   const value = await redis.get(guestSessionKey(sessionId));
   if (!value) return null;
   try {
-    return JSON.parse(value) as { shareId: string; documentId: string; inviteeEmail: string; permissions: GuestPermission[]; expiresAt: string };
+    return JSON.parse(value) as GuestSession;
   } catch {
     return null;
   }
+}
+
+/** Returns the document only when this browser's guest session belongs to the link. */
+export async function getGuestSessionDocument(token: string, sessionId: string | undefined) {
+  const [share, session] = await Promise.all([findShare(token), getGuestSession(sessionId)]);
+  if (!session || session.shareId !== share.id || session.documentId !== share.documentId) return null;
+  return session.documentId;
 }
 
 export async function authorizeDocument(documentId: string, input: { userId?: string; sessionId?: string }) {

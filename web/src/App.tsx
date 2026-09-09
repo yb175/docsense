@@ -12,6 +12,7 @@ function getRoute() {
 
 export function App() {
   const [route, setRoute] = useState(getRoute);
+  const [hasValidToken, setHasValidToken] = useState<boolean | null>(null);
 
   useEffect(() => {
     const onNavigate = () => setRoute(getRoute());
@@ -23,6 +24,13 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (route.path !== '/' || route.hash) return;
+    void fetch('/auth/me', { credentials: 'include' })
+      .then((response) => setHasValidToken(response.ok))
+      .catch(() => setHasValidToken(false));
+  }, [route.path, route.hash]);
+
   // Path-first: /documents/:id wins over any leftover hash.
   if (route.path.startsWith('/documents/')) {
     return <SharedDocumentPage documentId={route.path.slice('/documents/'.length)} />;
@@ -31,5 +39,7 @@ export function App() {
     return <ShareAccessPage token={decodeURIComponent(route.hash.slice('#/share/'.length))} />;
   }
   if (route.path === '/authenticated') return <AuthenticatedPage />;
+  if (route.path === '/' && !route.hash && hasValidToken === null) return null;
+  if (route.path === '/' && hasValidToken) return <AuthenticatedPage />;
   return route.path === '/otp' ? <OtpPage /> : <AuthPage />;
 }

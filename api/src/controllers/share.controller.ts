@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
 import { guestSessionKey, redis } from '../db/redis.js';
-import { createShare, listShares, requestGuestOtp, revokeShare, verifyGuestOtp } from '../services/share.service.js';
+import { createShare, getGuestSessionDocument, listShares, requestGuestOtp, revokeShare, verifyGuestOtp } from '../services/share.service.js';
 import type { AppEnv } from '../types/index.js';
 
 const secureCookie = process.env.NODE_ENV === 'production';
@@ -24,6 +24,11 @@ export async function revokeShareHandler(c: Context<AppEnv>) {
 
 export async function requestGuestOtpHandler(c: Context<AppEnv>) {
   return c.json(await requestGuestOtp(c.get('body') as { token: string; email: string }));
+}
+
+export async function getGuestSessionHandler(c: Context<AppEnv>) {
+  const documentId = await getGuestSessionDocument(c.req.param('token')!, getCookie(c, 'docsense_guest_session'));
+  return c.json({ documentId, verified: Boolean(documentId) });
 }
 
 export async function verifyGuestOtpHandler(c: Context<AppEnv>) {

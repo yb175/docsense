@@ -12,11 +12,15 @@ export function ShareAccessPage({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // If guest already verified this token before, skip straight to the document.
+  // The session cookie is HttpOnly, so ask the server whether it belongs to this link.
   useEffect(() => {
-    // We don't know the documentId yet from just the token, so we check
-    // after requesting OTP — handled server-side. Nothing to do here on mount.
-  }, []);
+    void (async () => {
+      const response = await fetch(`${API}/api/shares/${encodeURIComponent(token)}/session`, { credentials: 'include' });
+      if (!response.ok) return;
+      const result = await response.json() as { documentId: string | null; verified: boolean };
+      if (result.verified && result.documentId) goTo(`/documents/${result.documentId}`);
+    })();
+  }, [token]);
 
   const requestOtp = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
