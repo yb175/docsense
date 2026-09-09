@@ -4,6 +4,7 @@ import { generateDocumentSummary, type SummaryModel } from './chains/summary.cha
 import { createEmbeddingModel, embedDocuments, embedQuery, type EmbeddingModel } from './models/embeddings.js';
 import { persistChunkEmbeddings } from '../services/ai-persistence.service.js';
 import { retrieveForQuestion, type RetrievedChunk } from './retrieval/retriever.js';
+import { buildRagContext, type ConversationMessage, type RagContext } from './context/context-builder.js';
 import { extractUnifiedText, type UnifiedTextResult } from './loaders/vlm-loader.js';
 import { splitUnifiedText, type DocumentChunkInput, type DocumentSplitterOptions } from './splitters/document-splitter.js';
 
@@ -20,6 +21,18 @@ export async function embedAndStoreDocumentChunks(
 
 export async function embedUserQuestion(question: string, model: EmbeddingModel = createEmbeddingModel()): Promise<number[]> {
   return embedQuery(question, model);
+}
+
+export async function buildDocumentChatContext(input: {
+  documentId: string;
+  question: string;
+  conversation?: ConversationMessage[];
+  model?: EmbeddingModel;
+  topK?: number;
+  minSimilarity?: number;
+}): Promise<RagContext> {
+  const chunks = await retrieveDocumentContext(input);
+  return buildRagContext({ question: input.question, chunks, conversation: input.conversation });
 }
 
 export async function retrieveDocumentContext(input: {

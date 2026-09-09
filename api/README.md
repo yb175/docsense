@@ -150,6 +150,15 @@ npm run test:ai:summary:integration
 
 They cover chunk summaries, grounded prompt construction, final 3–5 sentence validation, provider failures, persistence, and processing status transitions.
 
+RAG context checks:
+
+```bash
+npm run test:ai:context
+npm run test:ai:context:live
+```
+
+The unit checks validate source/page formatting, conversation trimming, no-context behavior, and prompt grounding. The live check uses the configured Gemini embedding key once for chunk embeddings and once for query retrieval, then cleans up its database fixtures.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash
