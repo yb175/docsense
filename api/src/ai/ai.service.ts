@@ -1,4 +1,6 @@
-import { createVisionModel } from './models/llm.js';
+import { createChunkSummaryModel, createFinalSummaryModel, createVisionModel } from './models/llm.js';
+import { generateAndPersistDocumentSummary } from '../services/summary.service.js';
+import { generateDocumentSummary, type SummaryModel } from './chains/summary.chain.js';
 import { createEmbeddingModel, embedDocuments, embedQuery, type EmbeddingModel } from './models/embeddings.js';
 import { persistChunkEmbeddings } from '../services/ai-persistence.service.js';
 import { retrieveForQuestion, type RetrievedChunk } from './retrieval/retriever.js';
@@ -28,6 +30,18 @@ export async function retrieveDocumentContext(input: {
   minSimilarity?: number;
 }): Promise<RetrievedChunk[]> {
   return retrieveForQuestion({ ...input, model: input.model ?? createEmbeddingModel() });
+}
+
+export async function summarizeDocumentChunks(
+  chunks: Array<{ text: string; pageStart?: number | null; pageEnd?: number | null }>,
+  chunkModel: SummaryModel = createChunkSummaryModel(),
+  finalModel: SummaryModel = createFinalSummaryModel(),
+) {
+  return generateDocumentSummary(chunkModel, finalModel, chunks);
+}
+
+export async function generateAndPersistSummary(documentId: string) {
+  return generateAndPersistDocumentSummary({ documentId });
 }
 
 export async function chunkUnifiedPdfText(

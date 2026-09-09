@@ -141,6 +141,15 @@ npm run test:ai:embeddings:integration
 
 The unit checks validate LangChain embedding dimensions and provider failures. The integration checks validate pgvector persistence, retry-safe upserts, similarity ranking, unrelated queries, and strict document-scoped retrieval.
 
+Summary checks:
+
+```bash
+npm run test:ai:summary
+npm run test:ai:summary:integration
+```
+
+They cover chunk summaries, grounded prompt construction, final 3–5 sentence validation, provider failures, persistence, and processing status transitions.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash
