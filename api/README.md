@@ -45,7 +45,7 @@ Services:
 
 Local Compose defaults to Mailpit, so OTPs appear in the Mailpit UI and are not delivered to external inboxes. For real delivery, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `MAIL_FROM` in `.env` before starting Compose. For Gmail, use `smtp.gmail.com`, port `587`, and a Gmail app password.
 
-The PostgreSQL and Redis data volumes are preserved by `docker compose down`. Use `docker compose down -v` only when you intentionally want to delete them.
+The PostgreSQL and Redis data volumes are preserved by `docker compose down`. Use `docker compose down -v` only when you intentionally want to delete them. PostgreSQL uses the `pgvector/pgvector:pg16` image because AI chunk embeddings are stored in the same database.
 
 ## Run the API locally
 
@@ -99,6 +99,14 @@ Run static checks:
 npm run typecheck
 npm run build
 ```
+
+With the API, PostgreSQL, Redis, and Mailpit running, execute the AI persistence checks after applying migrations:
+
+```bash
+npm run test:ai:foundation
+```
+
+The check verifies pgvector availability, AI persistence CRUD, embedding dimensions, uniqueness, conversation document isolation, and database-level conversation principal constraints.
 
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 

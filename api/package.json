@@ -15,6 +15,7 @@
     "test:documents:unit": "tsx --env-file-if-exists=.env scripts/document-unit.ts",
     "test:documents:integration": "tsx --env-file-if-exists=.env scripts/document-integration.ts",
     "test:documents:e2e": "tsx --env-file-if-exists=.env scripts/document-e2e.ts",
+    "test:ai:foundation": "tsx --env-file-if-exists=.env scripts/ai-foundation-integration.ts",
     "e2e:sessions": "tsx --env-file-if-exists=.env scripts/session-e2e.ts",
     "e2e:comments": "tsx --env-file-if-exists=.env scripts/comments-e2e.ts",
     "test:comments:connections": "tsx --env-file-if-exists=.env scripts/comment-connection-unit.ts",
