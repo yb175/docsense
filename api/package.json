@@ -4,20 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "e2e:auth": "tsx --env-file-if-exists=.env scripts/auth-e2e.ts"
   },
   "dependencies": {
     "@hono/node-server": "latest",
     "@prisma/client": "6.19.3",
-    "hono": "latest"
+    "hono": "latest",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
+    "nodemailer": "^10.0.1",
+    "prisma": "6.19.3",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "prisma": "6.19.3",
+    "@types/nodemailer": "^7.0.6",
     "tsx": "latest",
     "typescript": "latest",
     "@types/node": "latest"
