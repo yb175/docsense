@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:comments": "node --experimental-strip-types scripts/comments-sync.test.ts",
     "preview": "vite preview"
   },
   "keywords": [],

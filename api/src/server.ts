@@ -1,14 +1,18 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { WebSocketServer } from 'ws';
 import { cors } from 'hono/cors';
 
 import { errorHandler } from './middleware/error-handler.js';
 import { env } from './lib/env.js';
 import { authRoutes } from './routes/auth.js';
+import { commentRoutes } from './routes/comments.js';
+import { commentWebSocketRoutes } from './routes/comment-websocket.js';
 import { documentRoutes } from './routes/documents.js';
 import { shareRoutes } from './routes/shares.js';
 
 const app = new Hono();
+const webSocketServer = new WebSocketServer({ noServer: true });
 
 app.onError(errorHandler);
 
@@ -24,11 +28,13 @@ app.use('*', cors({
 }));
 app.route('/auth', authRoutes);
 app.route('/api/documents', documentRoutes);
+app.route('/api', commentRoutes);
 app.route('/api', shareRoutes);
+app.route('/', commentWebSocketRoutes);
 
 const port = env.PORT;
 
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: app.fetch, port, websocket: { server: webSocketServer } }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`);
 });
 

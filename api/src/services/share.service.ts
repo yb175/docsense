@@ -10,7 +10,7 @@ import { emailSender } from './email.service.js';
 
 export const SHARE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const GUEST_SESSION_TTL_SECONDS = 24 * 60 * 60;
-export const GUEST_PERMISSIONS = ['VIEW'] as const;
+export const GUEST_PERMISSIONS = ['VIEW', 'COMMENT'] as const;
 export type GuestPermission = typeof GUEST_PERMISSIONS[number];
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -123,7 +123,9 @@ export async function getGuestSession(sessionId: string | undefined): Promise<Gu
   const value = await redis.get(guestSessionKey(sessionId));
   if (!value) return null;
   try {
-    return JSON.parse(value) as GuestSession;
+    const session = JSON.parse(value) as GuestSession;
+    if (!session.expiresAt || new Date(session.expiresAt) <= new Date()) return null;
+    return session;
   } catch {
     return null;
   }

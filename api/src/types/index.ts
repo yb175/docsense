@@ -6,5 +6,7 @@ export type AppEnv = {
     auth: AuthToken;
     /** Populated by validateJson. */
     body: unknown;
+    /** Set after a WebSocket upgrade request passes document authorization. */
+    wsDocumentId: string;
   };
 };
