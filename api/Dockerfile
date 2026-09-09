@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS build
+FROM node:22.13-alpine AS build
 
 WORKDIR /app
 COPY package*.json ./
@@ -10,7 +10,7 @@ COPY prisma ./prisma
 COPY src ./src
 RUN npm run prisma:generate && npm run build
 
-FROM node:22-alpine
+FROM node:22.13-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production

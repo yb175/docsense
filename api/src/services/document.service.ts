@@ -19,11 +19,19 @@ export function isPdf(bytes: Buffer): boolean {
     && /startxref\s+\d+\s+%%EOF\s*$/.test(content);
 }
 
+export async function removeDocument(documentId: string) {
+  const document = await prisma.document.findUnique({ where: { id: documentId }, select: { storageKey: true } });
+  if (!document) return;
+  await deleteObject(document.storageKey);
+  await prisma.document.delete({ where: { id: documentId } }); // Cascades chunks, vectors, shares, comments, and conversations.
+  console.info(`[ai:cleanup] document=${documentId} deleted`);
+}
+
 export async function listDocuments(ownerId: string) {
   return prisma.document.findMany({
     where: { ownerId },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true, filename: true, sizeBytes: true, mimeType: true, createdAt: true, updatedAt: true },
+    select: { id: true, filename: true, sizeBytes: true, mimeType: true, createdAt: true, updatedAt: true, processingStatus: true, aiSummary: true },
   });
 }
 

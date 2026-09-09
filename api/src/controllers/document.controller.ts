@@ -2,10 +2,12 @@ import type { Context } from 'hono';
 
 import { badRequest, payloadTooLarge, unsupportedMediaType } from '../lib/errors.js';
 import { env } from '../lib/env.js';
-import { createDocument, isPdf, listDocuments } from '../services/document.service.js';
+import { createDocument, isPdf, listDocuments, removeDocument } from '../services/document.service.js';
 import { authorizeDocument } from '../services/share.service.js';
 import { getCookie } from 'hono/cookie';
 import { downloadPdf } from '../storage/s3.service.js';
+import { prisma } from '../db/prisma.js';
+import { processDocument, startDocumentProcessing } from '../ai/ai.service.js';
 import type { AppEnv } from '../types/index.js';
 
 function sanitizeFilename(filename: string): string {
@@ -25,6 +27,13 @@ export async function getDocument(c: Context<AppEnv>) {
   const access = await authorizeDocument(c.req.param('documentId')!, { userId: c.get('auth')?.userId, sessionId });
   const { storageKey: _storageKey, ...document } = access.document;
   return c.json({ document, access: access.kind });
+}
+
+export async function getDocumentSummary(c: Context<AppEnv>) {
+  const documentId = c.req.param('documentId')!;
+  await authorizeDocument(documentId, { userId: c.get('auth')?.userId, sessionId: getCookie(c, 'docsense_guest_session') });
+  const document = await prisma.document.findUnique({ where: { id: documentId }, select: { aiSummary: true, processingStatus: true } });
+  return c.json({ summary: document?.aiSummary ?? null, processingStatus: document?.processingStatus ?? null });
 }
 
 export async function getDocumentContent(c: Context<AppEnv>) {
@@ -56,10 +65,21 @@ export async function uploadDocument(c: Context<AppEnv>) {
   }
   if (!isPdf(bytes)) throw unsupportedMediaType();
 
+  console.info(`[ai:upload] validating PDF filename=${filename} bytes=${bytes.length}`);
   const document = await createDocument({
     ownerId: c.get('auth').userId,
     filename,
     bytes,
   });
-  return c.json(document, 201);
+  const started = await startDocumentProcessing(document.id);
+  if (!started) {
+    const current = await prisma.document.findUnique({ where: { id: document.id }, select: { processingStatus: true } });
+    if (current?.processingStatus !== 'PROCESSING') {
+      await removeDocument(document.id);
+      throw new Error(`Unable to start processing document ${document.id}`);
+    }
+  }
+  console.info(`[ai:upload] stored document=${document.id} status=PROCESSING`);
+  if (started) void processDocument(document.id, bytes);
+  return c.json({ ...document, processingStatus: 'PROCESSING' }, 201);
 }
