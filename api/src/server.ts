@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { errorHandler } from './middleware/error-handler.js';
 import { env } from './lib/env.js';
 import { authRoutes } from './routes/auth.js';
+import { documentRoutes } from './routes/documents.js';
 
 const app = new Hono();
 
@@ -18,6 +19,7 @@ app.use('/auth/*', cors({
   ],
 }));
 app.route('/auth', authRoutes);
+app.route('/api/documents', documentRoutes);
 
 const port = env.PORT;
 
