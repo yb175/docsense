@@ -116,6 +116,14 @@ npm run test:ai:pdf-loader
 
 They cover page ordering, extracted text, empty pages, malformed PDFs, and visual-fallback flags.
 
+Selective VLM checks can be run without provider credentials:
+
+```bash
+npm run test:ai:vlm-loader
+```
+
+They verify that normal pages bypass Gemini, poor pages receive page-specific image input, unified text retains page metadata, and provider failures are surfaced.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash

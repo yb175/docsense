@@ -28,6 +28,8 @@ const Schema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(1),
   AWS_S3_BUCKET: z.string().min(1),
   MAX_PDF_SIZE_BYTES: z.coerce.number().int().positive(),
+  GEMINI_API_KEY: z.string().optional(),
+  AI_VISION_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
 });
 
 const parsed = Schema.safeParse(loadEnv(process.env));

@@ -1,3 +1,4 @@
+import { createCanvas } from '@napi-rs/canvas';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export const MIN_EXTRACTED_WORDS = 8;
@@ -29,6 +30,34 @@ function wordCount(text: string): number {
 
 function pageNeedsVisualFallback(text: string, words: number): boolean {
   return words < MIN_EXTRACTED_WORDS;
+}
+
+export async function renderPdfPage(bytes: Uint8Array, pageNumber: number): Promise<Uint8Array> {
+  if (bytes.length === 0) throw new PdfExtractionError('PDF is empty');
+
+  let document: pdfjs.PDFDocumentProxy;
+  try {
+    document = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: true, verbosity: 0 }).promise;
+  } catch (error) {
+    throw new PdfExtractionError('Unable to parse PDF', { cause: error });
+  }
+
+  try {
+    if (pageNumber < 1 || pageNumber > document.numPages) {
+      throw new PdfExtractionError(`PDF page ${pageNumber} does not exist`);
+    }
+    const page = await document.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const context = canvas.getContext('2d');
+    await page.render({ canvasContext: context as never, canvas: canvas as never, viewport }).promise;
+    return canvas.toBuffer('image/png');
+  } catch (error) {
+    if (error instanceof PdfExtractionError) throw error;
+    throw new PdfExtractionError(`Unable to render page ${pageNumber}`, { cause: error });
+  } finally {
+    await document.cleanup();
+  }
 }
 
 export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtractionResult> {
