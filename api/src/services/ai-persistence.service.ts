@@ -1,4 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { MessageRole } from '@prisma/client';
+
+import { assertEmbedding } from '../ai/models/embeddings.js';
+import type { DocumentChunkInput } from '../ai/splitters/document-splitter.js';
 
 import { prisma } from '../db/prisma.js';
 import { badRequest } from '../lib/errors.js';
@@ -79,5 +83,39 @@ export async function listDocumentChunks(documentId: string) {
     where: { documentId },
     orderBy: { chunkIndex: 'asc' },
     select: { id: true, documentId: true, chunkIndex: true, text: true, pageStart: true, pageEnd: true, createdAt: true },
+  });
+}
+
+export async function persistChunkEmbeddings(
+  chunks: DocumentChunkInput[],
+  embeddings: number[][],
+): Promise<void> {
+  if (chunks.length !== embeddings.length) throw new Error('Chunk and embedding counts must match');
+  embeddings.forEach(assertEmbedding);
+
+  await prisma.$transaction(async (transaction) => {
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index]!;
+      const embedding = embeddings[index]!;
+      const vector = `[${embedding.join(',')}]`;
+      await transaction.$executeRaw`
+        INSERT INTO "document_chunks" (
+          "id", "documentId", "chunkIndex", "text", "pageStart", "pageEnd", "embedding"
+        ) VALUES (
+          ${randomUUID()}::uuid,
+          ${chunk.documentId}::uuid,
+          ${chunk.chunkIndex},
+          ${chunk.text},
+          ${chunk.pageStart},
+          ${chunk.pageEnd},
+          ${vector}::vector
+        )
+        ON CONFLICT ("documentId", "chunkIndex") DO UPDATE SET
+          "text" = EXCLUDED."text",
+          "pageStart" = EXCLUDED."pageStart",
+          "pageEnd" = EXCLUDED."pageEnd",
+          "embedding" = EXCLUDED."embedding"
+      `;
+    }
   });
 }

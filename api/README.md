@@ -132,6 +132,15 @@ npm run test:ai:splitter
 
 They cover deterministic ordering, chunk size/overlap, page metadata, empty input, and invalid splitter configuration.
 
+Embedding and retrieval checks:
+
+```bash
+npm run test:ai:embeddings
+npm run test:ai:embeddings:integration
+```
+
+The unit checks validate LangChain embedding dimensions and provider failures. The integration checks validate pgvector persistence, retry-safe upserts, similarity ranking, unrelated queries, and strict document-scoped retrieval.
+
 With the API, PostgreSQL, Redis, and Mailpit running, execute the production-shaped authentication smoke suite:
 
 ```bash

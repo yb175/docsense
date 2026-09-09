@@ -30,6 +30,7 @@ const Schema = z.object({
   MAX_PDF_SIZE_BYTES: z.coerce.number().int().positive(),
   GEMINI_API_KEY: z.string().optional(),
   AI_VISION_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
+  AI_EMBEDDING_MODEL: z.string().min(1).default('gemini-embedding-001'),
 });
 
 const parsed = Schema.safeParse(loadEnv(process.env));
