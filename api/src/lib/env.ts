@@ -28,14 +28,6 @@ const Schema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(1),
   AWS_S3_BUCKET: z.string().min(1),
   MAX_PDF_SIZE_BYTES: z.coerce.number().int().positive(),
-  OPENAI_API_KEY: z.string().optional(),
-  GEMINI_API_KEY: z.string().optional(),
-  AI_VISION_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
-  AI_CHUNK_SUMMARY_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),
-  AI_SUMMARY_MODEL: z.string().min(1).default('gpt-4.1-mini'),
-  AI_CHAT_MODEL: z.string().min(1).default('gpt-4.1-mini'),
-  AI_FALLBACK_CHAT_MODEL: z.string().min(1).default('gemini-2.5-flash'),
-  AI_EMBEDDING_MODEL: z.string().min(1).default('gemini-embedding-001'),
 });
 
 const parsed = Schema.safeParse(loadEnv(process.env));
