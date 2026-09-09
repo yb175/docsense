@@ -51,7 +51,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/docsense
       REDIS_URL: redis://redis:6379
-      # Defaults to Mailpit locally. Set SMTP_HOST/PORT/USER/PASS in .env for real delivery.
+      # Local mail is captured by Mailpit. Production SMTP must be supplied via .env/secrets.
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_USER: ${SMTP_USER:-}

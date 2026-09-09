@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum DocumentShareStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 model User {
   id            String   @id @default(uuid()) @db.Uuid
   name          String   @db.VarChar(100)
@@ -31,8 +38,27 @@ model Document {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner  User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  shares DocumentShare[]
 
   @@unique([ownerId, normalizedFilename])
   @@index([ownerId])
+}
+
+model DocumentShare {
+  id           String              @id @default(uuid()) @db.Uuid
+  documentId   String              @db.Uuid
+  inviteeEmail String              @db.VarChar(255)
+  inviteeName  String              @db.VarChar(100)
+  tokenHash    String              @unique
+  status       DocumentShareStatus @default(PENDING)
+  createdAt    DateTime            @default(now())
+  expiresAt    DateTime?
+  acceptedAt   DateTime?
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([documentId, status])
+  @@map("document_shares")
 }

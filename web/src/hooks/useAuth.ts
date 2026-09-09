@@ -21,7 +21,6 @@ export function useAuth() {
         goTo('/otp');
       } else {
         const data = await authApi.login({ email, password });
-        localStorage.setItem('docsenseToken', data.token);
         setAuthenticated(true);
         goTo('/authenticated');
       }

@@ -2,7 +2,10 @@ import type { Context } from 'hono';
 
 import { badRequest, payloadTooLarge, unsupportedMediaType } from '../lib/errors.js';
 import { env } from '../lib/env.js';
-import { createDocument, isPdf } from '../services/document.service.js';
+import { createDocument, isPdf, listDocuments } from '../services/document.service.js';
+import { authorizeDocument } from '../services/share.service.js';
+import { getCookie } from 'hono/cookie';
+import { downloadPdf } from '../storage/s3.service.js';
 import type { AppEnv } from '../types/index.js';
 
 function sanitizeFilename(filename: string): string {
@@ -11,6 +14,24 @@ function sanitizeFilename(filename: string): string {
     throw badRequest('Invalid filename');
   }
   return value;
+}
+
+export async function listOwnedDocuments(c: Context<AppEnv>) {
+  return c.json({ documents: await listDocuments(c.get('auth').userId) });
+}
+
+export async function getDocument(c: Context<AppEnv>) {
+  const sessionId = getCookie(c, 'docsense_guest_session');
+  const access = await authorizeDocument(c.req.param('documentId')!, { userId: c.get('auth')?.userId, sessionId });
+  const { storageKey: _storageKey, ...document } = access.document;
+  return c.json({ document, access: access.kind });
+}
+
+export async function getDocumentContent(c: Context<AppEnv>) {
+  const sessionId = getCookie(c, 'docsense_guest_session');
+  const access = await authorizeDocument(c.req.param('documentId')!, { userId: c.get('auth')?.userId, sessionId });
+  const file = await downloadPdf(access.document.storageKey);
+  return new Response(file.body as BodyInit, { headers: { 'Content-Type': file.contentType ?? 'application/pdf', 'Content-Disposition': `inline; filename="${access.document.filename.replace(/"/gu, '')}"`, 'Cache-Control': 'private, no-store' } });
 }
 
 export async function uploadDocument(c: Context<AppEnv>) {

@@ -19,6 +19,14 @@ export function isPdf(bytes: Buffer): boolean {
     && /startxref\s+\d+\s+%%EOF\s*$/.test(content);
 }
 
+export async function listDocuments(ownerId: string) {
+  return prisma.document.findMany({
+    where: { ownerId },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, filename: true, sizeBytes: true, mimeType: true, createdAt: true, updatedAt: true },
+  });
+}
+
 export async function createDocument(input: {
   ownerId: string;
   filename: string;
