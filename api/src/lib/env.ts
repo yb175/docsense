@@ -22,6 +22,11 @@ const Schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().min(1).default('Docsense <no-reply@docsense.local>'),
+  AWS_REGION: z.string().min(1),
+  AWS_ACCESS_KEY_ID: z.string().min(1),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1),
+  AWS_S3_BUCKET: z.string().min(1),
+  MAX_PDF_SIZE_BYTES: z.coerce.number().int().positive(),
 });
 
 const parsed = Schema.safeParse(loadEnv(process.env));
