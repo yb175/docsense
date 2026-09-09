@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { badRequest, forbidden } from '../lib/errors.js';
 import { authorizeDocument } from './share.service.js';
+import { commentConnections } from './comment-connection.manager.js';
 import type { CreateCommentInput } from '../middleware/validation.js';
 
 type Principal = { userId?: string; sessionId?: string };
@@ -78,5 +79,17 @@ export async function createComment(documentId: string, input: CreateCommentInpu
     },
     select: commentSelect,
   });
-  return present(row);
+  const comment = present(row);
+  commentConnections.broadcast(documentId, {
+    type: 'comment.created',
+    documentId,
+    comment: {
+      id: comment.id,
+      parentId: comment.parentId,
+      content: comment.content,
+      author: comment.author,
+      createdAt: comment.createdAt.toISOString(),
+    },
+  });
+  return comment;
 }

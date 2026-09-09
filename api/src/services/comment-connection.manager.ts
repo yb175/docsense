@@ -1,5 +1,7 @@
 import type { WSContext } from 'hono/ws';
 
+import type { CommentCreatedEvent } from '../types/comment-events.js';
+
 export class CommentConnectionManager {
   private readonly byDocument = new Map<string, Set<WSContext>>();
 
@@ -14,6 +16,20 @@ export class CommentConnectionManager {
     if (!connections) return;
     connections.delete(socket);
     if (connections.size === 0) this.byDocument.delete(documentId);
+  }
+
+  broadcast(documentId: string, event: CommentCreatedEvent) {
+    for (const socket of this.getConnections(documentId)) {
+      if (socket.readyState !== 1) {
+        this.remove(documentId, socket);
+        continue;
+      }
+      try {
+        socket.send(JSON.stringify(event));
+      } catch {
+        this.remove(documentId, socket);
+      }
+    }
   }
 
   getConnections(documentId: string): ReadonlySet<WSContext> {
