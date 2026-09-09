@@ -2,6 +2,10 @@ import { createCanvas } from '@napi-rs/canvas';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export const MIN_EXTRACTED_WORDS = 8;
+export const MAX_PDF_PAGES = 200;
+export const MAX_RENDER_DIMENSION = 4096;
+export const MAX_RENDER_PIXELS = 16_000_000;
+export const MAX_RENDERED_PNG_BYTES = 10 * 1024 * 1024;
 
 export type PageExtraction = {
   pageNumber: number;
@@ -48,10 +52,17 @@ export async function renderPdfPage(bytes: Uint8Array, pageNumber: number): Prom
     }
     const page = await document.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const width = Math.ceil(viewport.width);
+    const height = Math.ceil(viewport.height);
+    if (width > MAX_RENDER_DIMENSION || height > MAX_RENDER_DIMENSION || width * height > MAX_RENDER_PIXELS) {
+      throw new PdfExtractionError('PDF page exceeds the visual-analysis rendering limit');
+    }
+    const canvas = createCanvas(width, height);
     const context = canvas.getContext('2d');
     await page.render({ canvasContext: context as never, canvas: canvas as never, viewport }).promise;
-    return canvas.toBuffer('image/png');
+    const image = canvas.toBuffer('image/png');
+    if (image.length > MAX_RENDERED_PNG_BYTES) throw new PdfExtractionError('Rendered PDF page exceeds the visual-analysis size limit');
+    return image;
   } catch (error) {
     if (error instanceof PdfExtractionError) throw error;
     throw new PdfExtractionError(`Unable to render page ${pageNumber}`, { cause: error });
@@ -73,6 +84,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtractionRe
 
   try {
     if (document.numPages === 0) throw new PdfExtractionError('PDF contains no pages');
+    if (document.numPages > MAX_PDF_PAGES) throw new PdfExtractionError(`PDF exceeds the ${MAX_PDF_PAGES}-page processing limit`);
 
     const pages: PageExtraction[] = [];
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {

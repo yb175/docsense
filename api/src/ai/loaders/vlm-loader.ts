@@ -3,6 +3,8 @@ import { HumanMessage } from '@langchain/core/messages';
 import { visualPagePrompt } from '../prompts/summary.prompt.js';
 import { extractPdfText, renderPdfPage, type PageExtraction, type PdfExtractionResult } from './pdf-loader.js';
 
+export const MAX_VISUAL_FALLBACK_PAGES = 10;
+
 export type VisualModel = {
   invoke(input: HumanMessage[]): Promise<{ content: unknown }>;
 };
@@ -55,12 +57,16 @@ export async function buildUnifiedText(
   model: VisualModel,
 ): Promise<UnifiedTextResult> {
   const pages: UnifiedPage[] = [];
+  let visualPages = 0;
   for (const page of extraction.pages) {
     if (!page.needsVisualFallback) {
       pages.push({ ...page, source: 'pdf' });
       continue;
     }
 
+    if (++visualPages > MAX_VISUAL_FALLBACK_PAGES) {
+      throw new VlmExtractionError(page.pageNumber, { cause: new Error(`PDF exceeds the ${MAX_VISUAL_FALLBACK_PAGES}-page visual-analysis limit`) });
+    }
     const image = await renderPdfPage(bytes, page.pageNumber);
     const visualDescription = await analyzeVisualPage(model, image, page.pageNumber);
     const text = [page.text, visualDescription].filter(Boolean).join('\n');

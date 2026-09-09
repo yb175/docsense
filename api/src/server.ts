@@ -12,6 +12,7 @@ import { commentWebSocketRoutes } from './routes/comment-websocket.js';
 import { chatRoutes } from './routes/chat.js';
 import { documentRoutes } from './routes/documents.js';
 import { shareRoutes } from './routes/shares.js';
+import { resumeDocumentProcessing } from './ai/ai.service.js';
 
 const app = new Hono();
 const webSocketServer = new WebSocketServer({ noServer: true });
@@ -26,7 +27,7 @@ app.use('*', async (c, next) => {
   try {
     await next();
   } finally {
-    console.info(`[api:${requestId}] ${c.req.method} ${c.req.path} ${c.res.status} ${Date.now() - startedAt}ms`);
+    if (!c.req.path.includes('/chat')) console.info(`[api:${requestId}] ${c.req.method} ${c.req.path} ${c.res.status} ${Date.now() - startedAt}ms`);
   }
 });
 
@@ -51,6 +52,7 @@ const port = env.PORT;
 
 serve({ fetch: app.fetch, port, websocket: { server: webSocketServer } }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`);
+  void resumeDocumentProcessing().catch((error) => console.error('[ai:pipeline] startup recovery failed', error));
 });
 
 export default app;

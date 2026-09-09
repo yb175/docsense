@@ -22,15 +22,9 @@ export function isPdf(bytes: Buffer): boolean {
 export async function removeDocument(documentId: string) {
   const document = await prisma.document.findUnique({ where: { id: documentId }, select: { storageKey: true } });
   if (!document) return;
-  let databaseDeleted = false;
-  try {
-    await prisma.document.delete({ where: { id: documentId } }); // Cascades chunks, vectors, shares, comments, and conversations.
-    databaseDeleted = true;
-  } catch (error) {
-    console.error(`[ai:cleanup] document=${documentId} database-delete-failed`, error);
-  }
-  await deleteObject(document.storageKey).catch((error) => console.error(`[ai:cleanup] document=${documentId} storage-delete-failed key=${document.storageKey}`, error));
-  console.info(`[ai:cleanup] document=${documentId} databaseDeleted=${databaseDeleted}`);
+  await prisma.document.delete({ where: { id: documentId } }); // Cascades chunks, vectors, shares, comments, and conversations.
+  await deleteObject(document.storageKey);
+  console.info(`[ai:cleanup] document=${documentId} deleted`);
 }
 
 export async function listDocuments(ownerId: string) {

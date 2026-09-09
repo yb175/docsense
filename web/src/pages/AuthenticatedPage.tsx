@@ -38,7 +38,7 @@ export function AuthenticatedPage() {
   const [isUploading, setIsUploading] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const load = async () => { try { const next = (await api<{ documents: Document[] }>('/api/documents')).documents.filter((document) => document.processingStatus !== 'FAILED'); setDocuments(next); return next; } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load documents'); return []; } };
+  const load = async () => { try { const next = (await api<{ documents: Document[] }>('/api/documents')).documents; setDocuments(next); return next; } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load documents'); return []; } };
   useEffect(() => {
     void api<{ user: User }>('/auth/me').then(({ user: currentUser }) => setUser(currentUser)).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to load account'));
     void load();

@@ -95,18 +95,28 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
   const onPdfError = useCallback((message: string) => setContentError(message), []);
 
   useEffect(() => {
+    let active = true;
     let objectUrl = '';
+    setDocument(null);
+    setSummary(null);
+    setSummaryStatus('PENDING');
+    setContentUrl('');
+    setContentError('');
+    setAuthError('');
+    setChatMessages([]);
     void (async () => {
       let metadataLoaded = false;
       try {
         log('workspace:start', documentId);
         const data = await request<{ document: Document; access: 'owner' | 'guest' }>(`/api/documents/${documentId}`);
         metadataLoaded = true;
+        if (!active) return;
         setDocument(data.document);
         setAccessKind(data.access);
         log('summary:start', documentId);
         const summaryResult = await getSummary(documentId);
         const status = summaryResult.processingStatus ?? 'PENDING';
+        if (!active) return;
         setSummary(summaryResult.summary);
         setSummaryStatus(status);
         log('summary:status', documentId, `status=${status} visible=${Boolean(summaryResult.summary)}`);
@@ -117,12 +127,14 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
           return;
         }
         const history = await getConversationMessages(documentId);
+        if (!active) return;
         setConversationId(history.conversationId);
         setChatMessages(history.messages.map((message) => ({ id: message.id, from: message.role === 'USER' ? 'you' : 'ai', text: message.content })));
         log('pdf:start', documentId);
         const response = await fetch(`${API}/api/documents/${documentId}/content`, { credentials: 'include' });
         if (!response.ok) throw new Error('Unable to retrieve PDF from storage');
         objectUrl = URL.createObjectURL(await response.blob());
+        if (!active) return URL.revokeObjectURL(objectUrl);
         setContentUrl(objectUrl);
         log('pdf:ready', documentId);
       } catch (cause) {
@@ -131,23 +143,27 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
         if (metadataLoaded) setContentError(`${message} Return to the dashboard and re-upload the PDF.`); else setAuthError(message);
       }
     })();
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [documentId, analysisVersion]);
 
   useEffect(() => {
     if (summaryStatus !== 'PENDING' && summaryStatus !== 'PROCESSING') return;
-    const interval = window.setInterval(() => {
-      void getSummary(documentId).then((result) => {
-        const status = result.processingStatus ?? 'PENDING';
-        if (status === 'COMPLETED' && result.summary) {
-          setSummary(result.summary);
-          setSummaryStatus(status);
-          setContentError('');
-          setAnalysisVersion((version) => version + 1);
-        }
-      }).catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(interval);
+    let active = true;
+    const poll = () => void getSummary(documentId).then((result) => {
+      if (!active) return;
+      const status = result.processingStatus ?? 'PENDING';
+      if (status === 'FAILED') {
+        setSummaryStatus(status);
+        setContentError('AI analysis failed. Please re-upload this PDF.');
+      } else if (status === 'COMPLETED' && result.summary) {
+        setSummary(result.summary);
+        setSummaryStatus(status);
+        setContentError('');
+        setAnalysisVersion((version) => version + 1);
+      }
+    }).catch(() => undefined);
+    const interval = window.setInterval(poll, 3000);
+    return () => { active = false; window.clearInterval(interval); };
   }, [documentId, summaryStatus]);
 
   const askSuggestedQuestion = (question: string) => {

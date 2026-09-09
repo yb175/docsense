@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { MessageRole } from '@prisma/client';
 
 import { prisma } from '../src/db/prisma.js';
+import { assertTestDatabase } from './test-db.js';
 import {
   appendMessage,
   createConversation,
@@ -17,6 +18,7 @@ const shareId = '00000000-0000-4000-8000-000000000004';
 const fixedDate = new Date('2026-01-01T00:00:00.000Z');
 
 async function main() {
+  assertTestDatabase();
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.$executeRaw`DELETE FROM "Document" WHERE "id" IN (${documentAId}::uuid, ${documentBId}::uuid)`;
 

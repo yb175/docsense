@@ -2,7 +2,6 @@ import { DocumentProcessingStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { createChunkSummaryModel, createFinalSummaryModel, createVisionModel } from './models/llm.js';
 import { generateAndPersistDocumentSummary } from '../services/summary.service.js';
-import { removeDocument } from '../services/document.service.js';
 import { generateDocumentSummary, type SummaryModel } from './chains/summary.chain.js';
 import { createEmbeddingModel, embedDocuments, embedQuery, type EmbeddingModel } from './models/embeddings.js';
 import { persistChunkEmbeddings } from '../services/ai-persistence.service.js';
@@ -10,8 +9,11 @@ import { retrieveForQuestion, type RetrievedChunk } from './retrieval/retriever.
 import { buildRagContext, type ConversationMessage, type RagContext } from './context/context-builder.js';
 import { extractUnifiedText, type UnifiedTextResult } from './loaders/vlm-loader.js';
 import { splitUnifiedText, type DocumentChunkInput, type DocumentSplitterOptions } from './splitters/document-splitter.js';
+import { downloadPdfBytes } from '../storage/s3.service.js';
 
 const activeDocuments = new Set<string>();
+const MAX_DOCUMENT_CHUNKS = 500;
+const EMBEDDING_BATCH_SIZE = 50;
 
 export async function startDocumentProcessing(documentId: string): Promise<boolean> {
   const started = await prisma.document.updateMany({
@@ -29,6 +31,7 @@ export async function processDocument(documentId: string, bytes: Uint8Array): Pr
   activeDocuments.add(documentId);
   console.info(`[ai:pipeline] document=${documentId} status=PROCESSING`);
   try {
+    await prisma.documentChunk.deleteMany({ where: { documentId } });
     const unifiedText = await extractUnifiedPdfText(bytes);
     console.info(`[ai:pipeline] document=${documentId} pages=${unifiedText.pages.length} extracted`);
     const chunks = await chunkUnifiedPdfText(documentId, unifiedText);
@@ -39,8 +42,11 @@ export async function processDocument(documentId: string, bytes: Uint8Array): Pr
     await generateAndPersistSummary(documentId);
     console.info(`[ai:pipeline] document=${documentId} status=COMPLETED`);
   } catch (error) {
-    await removeDocument(documentId).catch((cleanupError) => console.error(`[ai:cleanup] document=${documentId} failed`, cleanupError));
-    console.error(`[ai:pipeline] document=${documentId} status=FAILED_REMOVED`, error);
+    await prisma.document.updateMany({
+      where: { id: documentId, processingStatus: { not: DocumentProcessingStatus.COMPLETED } },
+      data: { processingStatus: DocumentProcessingStatus.FAILED },
+    }).catch((updateError) => console.error(`[ai:pipeline] document=${documentId} failed-to-record-failure`, updateError));
+    console.error(`[ai:pipeline] document=${documentId} status=FAILED`, error);
   } finally {
     activeDocuments.delete(documentId);
   }
@@ -54,7 +60,31 @@ export async function embedAndStoreDocumentChunks(
   chunks: DocumentChunkInput[],
   model: EmbeddingModel = createEmbeddingModel(),
 ): Promise<void> {
-  await persistChunkEmbeddings(chunks, await embedDocuments(chunks.map((chunk) => chunk.text), model));
+  if (chunks.length > MAX_DOCUMENT_CHUNKS) throw new Error(`Document exceeds the ${MAX_DOCUMENT_CHUNKS}-chunk processing limit`);
+  for (let index = 0; index < chunks.length; index += EMBEDDING_BATCH_SIZE) {
+    const batch = chunks.slice(index, index + EMBEDDING_BATCH_SIZE);
+    await persistChunkEmbeddings(batch, await embedDocuments(batch.map((chunk) => chunk.text), model));
+  }
+}
+
+export async function resumeDocumentProcessing(): Promise<void> {
+  const documents = await prisma.document.findMany({
+    where: { processingStatus: { in: [DocumentProcessingStatus.PENDING, DocumentProcessingStatus.PROCESSING] } },
+    select: { id: true, storageKey: true },
+  });
+  for (const document of documents) {
+    if (activeDocuments.has(document.id)) continue;
+    await prisma.document.updateMany({
+      where: { id: document.id, processingStatus: DocumentProcessingStatus.PENDING },
+      data: { processingStatus: DocumentProcessingStatus.PROCESSING },
+    });
+    void downloadPdfBytes(document.storageKey)
+      .then((bytes) => processDocument(document.id, bytes))
+      .catch(async (error) => {
+        await prisma.document.updateMany({ where: { id: document.id }, data: { processingStatus: DocumentProcessingStatus.FAILED } });
+        console.error(`[ai:pipeline] document=${document.id} status=FAILED resume`, error);
+      });
+  }
 }
 
 export async function embedUserQuestion(question: string, model: EmbeddingModel = createEmbeddingModel()): Promise<number[]> {

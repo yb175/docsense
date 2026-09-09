@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { prisma } from '../src/db/prisma.js';
+import { assertTestDatabase } from './test-db.js';
 import { EMBEDDING_DIMENSION } from '../src/ai/models/embeddings.js';
 import { persistChunkEmbeddings } from '../src/services/ai-persistence.service.js';
 import { retrieveDocumentChunks } from '../src/ai/retrieval/retriever.js';
@@ -15,6 +16,7 @@ function vector(axis: number): number[] {
 }
 
 async function main() {
+  assertTestDatabase();
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.user.create({
     data: {

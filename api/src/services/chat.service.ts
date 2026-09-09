@@ -38,7 +38,7 @@ export function extractChatToken(chunk: StreamingChatChunk): string {
 }
 
 export function countChatSentences(text: string): number {
-  return (text.trim().match(/[^.!?]+[.!?]+(?=\s|$)/gu) ?? []).length;
+  return [...new Intl.Segmenter('en', { granularity: 'sentence' }).segment(text)].filter((segment) => segment.segment.trim()).length;
 }
 
 export function isConciseChatResponse(text: string): boolean {

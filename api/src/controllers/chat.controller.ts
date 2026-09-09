@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
@@ -40,7 +41,9 @@ export async function listChatMessagesHandler(c: Context<AppEnv>) {
 
 export async function chatHandler(c: Context<AppEnv>) {
   const documentId = c.req.param('documentId')!;
-  console.info(`[ai:chat] document=${documentId} request=start`);
+  const requestId = randomUUID().slice(0, 8);
+  const startedAt = Date.now();
+  console.info(`[ai:chat:${requestId}] document=${documentId} request=start`);
   const input = c.get('body') as ChatInput;
   const access = await authorizeDocument(documentId, {
     userId: c.get('auth')?.userId,
@@ -59,22 +62,22 @@ export async function chatHandler(c: Context<AppEnv>) {
     await stream.writeSSE(event('message.start', { conversationId: prepared.conversationId }));
     let answer = '';
     try {
-      for await (const token of prepared.stream) {
-        answer += token;
-        await stream.writeSSE(event('message.token', { token }));
-      }
+      for await (const token of prepared.stream) answer += token;
       if (!isConciseChatResponse(answer)) {
         throw new Error('The assistant returned an answer outside the required 3–5 sentence limit. Please try again.');
       }
       await persistAssistantMessage(documentId, prepared.conversationId, answer);
+      await stream.writeSSE(event('message.token', { token: answer }));
       await stream.writeSSE(event('message.complete', {
         conversationId: prepared.conversationId,
         content: answer,
       }));
+      console.info(`[ai:chat:${requestId}] document=${documentId} completed ${Date.now() - startedAt}ms`);
     } catch (error) {
       await stream.writeSSE(event('message.error', {
         message: error instanceof Error ? error.message : 'Chat generation failed',
       }));
+      console.error(`[ai:chat:${requestId}] document=${documentId} failed ${Date.now() - startedAt}ms`, error);
     }
   });
 }

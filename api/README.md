@@ -12,6 +12,8 @@ REST backend for the AI PDF Intelligence & Collaboration System. The current imp
 
 ## Setup
 
+Node.js 22.13.0 or newer is required.
+
 From this directory:
 
 ```bash
