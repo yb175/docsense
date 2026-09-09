@@ -1,4 +1,6 @@
-const API_URL = '';
+import { API } from '../config';
+
+const API_URL = API;
 
 type AuthInput = { email: string; password: string };
 type SignupInput = AuthInput & { name: string };

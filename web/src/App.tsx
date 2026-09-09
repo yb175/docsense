@@ -5,6 +5,7 @@ import { SharedDocumentPage } from './pages/SharedDocumentPage';
 import { AuthPage } from './pages/AuthPage';
 import { OtpPage } from './pages/OtpPage';
 import { getPath, getHash } from './utils/navigation';
+import { API } from './config';
 
 function getRoute() {
   return { path: getPath(), hash: getHash() };
@@ -26,7 +27,7 @@ export function App() {
 
   useEffect(() => {
     if (route.path !== '/' || route.hash) return;
-    void fetch('/auth/me', { credentials: 'include' })
+    void fetch(`${API}/auth/me`, { credentials: 'include' })
       .then((response) => setHasValidToken(response.ok))
       .catch(() => setHasValidToken(false));
   }, [route.path, route.hash]);

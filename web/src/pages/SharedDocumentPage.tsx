@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { goTo } from '../utils/navigation';
+import { API } from '../config';
 
-const API = '';
+
 
 function getAuthHeaders(): Record<string, string> {
   return {};
@@ -24,9 +25,11 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
 
   useEffect(() => {
     void (async () => {
+      let metadataLoaded = false;
       try {
         const authHeader: Record<string, string> = getAuthHeaders();
         const data = await request<{ document: { filename: string }; access: 'owner' | 'guest' }>(`/api/documents/${documentId}`, { headers: authHeader });
+        metadataLoaded = true;
         setDocument(data.document);
         setAccessKind(data.access);
 
@@ -38,8 +41,8 @@ export function SharedDocumentPage({ documentId }: { documentId: string }) {
         setContentUrl(URL.createObjectURL(await response.blob()));
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Unable to access document';
-        if (!document) setAuthError(message);
-        else setContentError(message);
+        if (metadataLoaded) setContentError(message);
+        else setAuthError(message);
       }
     })();
   }, [documentId]);

@@ -36,7 +36,7 @@ export async function verifyGuestOtpHandler(c: Context<AppEnv>) {
   setCookie(c, 'docsense_guest_session', result.sessionId, {
     httpOnly: true,
     secure: secureCookie,
-    sameSite: 'Lax',
+    sameSite: secureCookie ? 'None' : 'Lax',
     path: '/',
     maxAge: result.maxAge,
   });

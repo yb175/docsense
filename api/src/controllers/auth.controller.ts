@@ -25,7 +25,7 @@ export const loginHandler: Handler<AppEnv> = async (c) => {
   setCookie(c, 'docsense_auth', result.token, {
     httpOnly: true,
     secure: secureCookie,
-    sameSite: 'Lax',
+    sameSite: secureCookie ? 'None' : 'Lax',
     path: '/',
     maxAge: result.expiresIn,
   });

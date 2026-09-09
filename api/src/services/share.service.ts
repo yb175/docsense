@@ -2,8 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { DocumentShareStatus } from '@prisma/client';
 
 import { prisma } from '../db/prisma.js';
-import { guestSessionKey, redis, shareOtpKey } from '../db/redis.js';
-import { badRequest, forbidden, unauthorized } from '../lib/errors.js';
+import { guestSessionKey, redis, shareOtpCooldownKey, shareOtpKey, shareOtpWindowKey } from '../db/redis.js';
+import { badRequest, conflict, forbidden, unauthorized } from '../lib/errors.js';
 import { EMAIL_OTP_TTL_SECONDS, generateOtp, hashOtp, verifyOtp } from '../lib/otp.js';
 import { env } from '../lib/env.js';
 import { emailSender } from './email.service.js';
@@ -85,6 +85,14 @@ async function findShare(token: string) {
 export async function requestGuestOtp(input: { token: string; email: string }) {
   const share = await findShare(input.token);
   if (normalizeEmail(input.email) !== share.inviteeEmail) throw forbidden('This email is not invited to the document');
+  const cooldown = await redis.set(shareOtpCooldownKey(share.id), '1', 'EX', 30, 'NX');
+  if (!cooldown) throw conflict('Please wait before requesting another code');
+  const requests = await redis.incr(shareOtpWindowKey(share.id));
+  if (requests === 1) await redis.expire(shareOtpWindowKey(share.id), 3600);
+  if (requests > 5) {
+    await redis.del(shareOtpCooldownKey(share.id));
+    throw conflict('Too many verification code requests');
+  }
   const otp = generateOtp();
   await redis.set(shareOtpKey(share.id), hashOtp(otp), 'EX', EMAIL_OTP_TTL_SECONDS);
   await emailSender.send({ to: share.inviteeEmail, subject: 'Your Docsense guest verification code', text: `Your verification code is ${otp}. It expires in 3 minutes and can be used once.` });
@@ -97,10 +105,14 @@ export async function verifyGuestOtp(input: { token: string; email: string; otp:
   const storedHash = await redis.getdel(shareOtpKey(share.id));
   if (!storedHash || !verifyOtp(input.otp, storedHash)) throw badRequest('The verification code is invalid or has expired');
 
+  const accepted = await prisma.documentShare.updateMany({
+    where: { id: share.id, status: DocumentShareStatus.PENDING, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+    data: { status: DocumentShareStatus.ACCEPTED, acceptedAt: share.acceptedAt ?? new Date() },
+  });
+  if (accepted.count !== 1) throw forbidden('This share is no longer active');
   const sessionId = randomBytes(32).toString('base64url');
   const ttl = Math.min(GUEST_SESSION_TTL_SECONDS, share.expiresAt ? Math.max(1, Math.floor((share.expiresAt.getTime() - Date.now()) / 1000)) : GUEST_SESSION_TTL_SECONDS);
   await redis.set(guestSessionKey(sessionId), JSON.stringify({ shareId: share.id, documentId: share.documentId, inviteeEmail: share.inviteeEmail, permissions: GUEST_PERMISSIONS, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() }), 'EX', ttl);
-  await prisma.documentShare.update({ where: { id: share.id }, data: { status: DocumentShareStatus.ACCEPTED, acceptedAt: share.acceptedAt ?? new Date() } });
   return { sessionId, maxAge: ttl, documentId: share.documentId };
 }
 
