@@ -17,7 +17,13 @@ class SmtpEmailSender implements EmailSender {
   constructor(private readonly transporter: Transporter) {}
 
   async send({ to, subject, text }: EmailMessage): Promise<void> {
-    await this.transporter.sendMail({ from: env.MAIL_FROM, to, subject, text });
+    try {
+      await this.transporter.sendMail({ from: env.MAIL_FROM, to, subject, text });
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : 'unknown error';
+      console.error(`[email:send] failed recipient=${to} reason=${cause}`);
+      throw error;
+    }
   }
 }
 
@@ -41,6 +47,9 @@ function buildEmailSender(): EmailSender {
       port,
       secure: port === 465,
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     }),
   );
 }
