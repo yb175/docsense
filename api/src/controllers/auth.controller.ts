@@ -13,22 +13,27 @@ export const signupHandler: Handler<AppEnv> = async (c) => {
   );
 };
 
-export const verifyEmailHandler: Handler<AppEnv> = async (c) => {
-  const user = await verifyEmail(c.get('body') as VerifyEmailInput);
-  return c.json({ user, message: 'Email verified.' });
-};
-
 const secureCookie = process.env.NODE_ENV === 'production';
 
-export const loginHandler: Handler<AppEnv> = async (c) => {
-  const result = await login(c.get('body') as LoginInput);
-  setCookie(c, 'docsense_auth', result.token, {
+function setAuthCookie(c: Parameters<typeof setCookie>[0], token: string, maxAge: number) {
+  setCookie(c, 'docsense_auth', token, {
     httpOnly: true,
     secure: secureCookie,
     sameSite: secureCookie ? 'None' : 'Lax',
     path: '/',
-    maxAge: result.expiresIn,
+    maxAge,
   });
+}
+
+export const verifyEmailHandler: Handler<AppEnv> = async (c) => {
+  const result = await verifyEmail(c.get('body') as VerifyEmailInput);
+  setAuthCookie(c, result.token, result.expiresIn);
+  return c.json({ ...result, message: 'Email verified.' });
+};
+
+export const loginHandler: Handler<AppEnv> = async (c) => {
+  const result = await login(c.get('body') as LoginInput);
+  setAuthCookie(c, result.token, result.expiresIn);
   return c.json(result);
 };
 

@@ -47,11 +47,19 @@ export async function verifyEmail(input: { email: string; otp: string }) {
   const storedHash = await redis.getdel(otpKey(user.id));
   if (!storedHash || !verifyOtp(input.otp, storedHash)) throw invalid();
 
-  return prisma.user.update({
+  const verifiedUser = await prisma.user.update({
     where: { id: user.id },
     data: { emailVerified: true },
     select: PUBLIC_USER,
   });
+
+  // Verification is the end of signup, so establish the same session as login.
+  return {
+    token: await signAuthToken(verifiedUser.id),
+    tokenType: 'Bearer' as const,
+    expiresIn: AUTH_TOKEN_TTL_SECONDS,
+    user: verifiedUser,
+  };
 }
 
 export async function login(input: { email: string; password: string }) {

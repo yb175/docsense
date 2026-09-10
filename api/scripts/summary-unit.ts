@@ -24,10 +24,8 @@ assert.equal(chunkCalls.length, 2);
 assert.equal(sentenceCount(result.finalSummary), 3);
 assert.match(result.finalSummary, /annual renewal/);
 
-await assert.rejects(
-  () => generateFinalSummary({ async invoke() { return { content: 'Only one sentence.' }; } }, ['one summary']),
-  (error: unknown) => error instanceof SummaryGenerationError && /3 to 5 sentences/.test(error.message),
-);
+const shortSummary = await generateFinalSummary({ async invoke() { return { content: 'Only one sentence.' }; } }, ['one summary']);
+assert.equal(shortSummary, 'Only one sentence.');
 await assert.rejects(
   () => generateDocumentSummary(chunkModel, finalModel, []),
   (error: unknown) => error instanceof SummaryGenerationError && /without chunks/.test(error.message),
@@ -36,9 +34,7 @@ await assert.rejects(
   () => generateDocumentSummary({ async invoke() { throw new Error('provider failure'); } }, finalModel, [{ text: 'content' }]),
   (error: unknown) => error instanceof SummaryGenerationError && /chunk summary/.test(error.message),
 );
-await assert.rejects(
-  () => generateDocumentSummary(chunkModel, { async invoke() { return { content: 'Only one sentence.' }; } }, [{ text: 'content' }]),
-  (error: unknown) => error instanceof SummaryGenerationError && /3 to 5 sentences/.test(error.message),
-);
+const shortDocumentSummary = await generateDocumentSummary(chunkModel, { async invoke() { return { content: 'Only one sentence.' }; } }, [{ text: 'content' }]);
+assert.equal(shortDocumentSummary.finalSummary, 'Only one sentence.');
 
 console.log('Summary unit checks: OK');

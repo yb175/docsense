@@ -29,7 +29,9 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (route.path !== '/' || route.hash) return;
+    const requiresOwnerSession = (route.path === '/' && !route.hash) || route.path === '/authenticated';
+    if (!requiresOwnerSession) return;
+    setHasValidToken(null);
     void fetch(`${API}/auth/me`, { credentials: 'include' })
       .then((response) => setHasValidToken(response.ok))
       .catch(() => setHasValidToken(false));
@@ -42,7 +44,8 @@ export function App() {
   if (route.hash.startsWith('#/share/')) {
     return <ShareAccessPage token={decodeURIComponent(route.hash.slice('#/share/'.length))} />;
   }
-  if (route.path === '/authenticated') return <AuthenticatedPage />;
+  if (route.path === '/authenticated' && hasValidToken === null) return null;
+  if (route.path === '/authenticated') return hasValidToken ? <AuthenticatedPage /> : <AuthPage />;
   if (route.path === '/' && !route.hash && hasValidToken === null) return null;
   if (route.path === '/' && hasValidToken) return <AuthenticatedPage />;
   return route.path === '/otp' ? <OtpPage /> : <AuthPage />;

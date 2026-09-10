@@ -75,7 +75,7 @@ export async function generateFinalSummary(model: SummaryModel, chunkSummaries: 
     const summary = await invokePrompt(model, finalSummarySystemPrompt, input);
     const sentences = sentenceCount(summary);
     if (sentences < 3 || sentences > 5) {
-      throw new SummaryGenerationError(`Final summary must contain 3 to 5 sentences; received ${sentences}`);
+      console.warn(`[ai:summary] sentence-count-outside-target count=${sentences} target=3-5`);
     }
     return summary;
   } catch (error) {

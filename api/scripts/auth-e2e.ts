@@ -145,6 +145,8 @@ async function main() {
   const verify = await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ email: email2, otp: otp2 }) });
   check('correct OTP verifies email', verify.status === 200, String(verify.status));
   check('emailVerified flipped to true', verify.body?.user?.emailVerified === true);
+  check('verification creates an auth token', typeof verify.body?.token === 'string' && verify.body.token.length > 0);
+  check('verification sets the auth cookie', /docsense_auth=/.test(verify.headers.get('set-cookie') ?? ''));
 
   const replay = await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ email: email2, otp: otp2 }) });
   check('verified OTP cannot be reused', replay.status === 400, String(replay.status));
