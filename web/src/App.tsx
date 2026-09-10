@@ -44,9 +44,9 @@ export function App() {
   if (route.hash.startsWith('#/share/')) {
     return <ShareAccessPage token={decodeURIComponent(route.hash.slice('#/share/'.length))} />;
   }
-  if (route.path === '/authenticated' && hasValidToken === null) return null;
+  if (route.path === '/authenticated' && hasValidToken === null) return <AuthPage />;
   if (route.path === '/authenticated') return hasValidToken ? <AuthenticatedPage /> : <AuthPage />;
-  if (route.path === '/' && !route.hash && hasValidToken === null) return null;
+  if (route.path === '/' && !route.hash && hasValidToken === null) return <AuthPage />;
   if (route.path === '/' && hasValidToken) return <AuthenticatedPage />;
   return route.path === '/otp' ? <OtpPage /> : <AuthPage />;
 }
