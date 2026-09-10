@@ -27,6 +27,7 @@
     "test:ai:context": "tsx --env-file-if-exists=.env scripts/context-builder-unit.ts",
     "test:ai:context:live": "NODE_ENV=test tsx --env-file-if-exists=.env scripts/context-builder-live.ts",
     "test:ai:chat": "tsx --env-file-if-exists=.env scripts/chat-service-unit.ts",
+    "test:email": "tsx scripts/email-service-unit.ts",
     "e2e:sessions": "tsx --env-file-if-exists=.env scripts/session-e2e.ts",
     "e2e:comments": "tsx --env-file-if-exists=.env scripts/comments-e2e.ts",
     "test:comments:connections": "tsx --env-file-if-exists=.env scripts/comment-connection-unit.ts",

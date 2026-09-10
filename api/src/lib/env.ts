@@ -22,6 +22,7 @@ const Schema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().min(1).default('Docsense <no-reply@docsense.local>'),
   AWS_REGION: z.string().min(1),
   AWS_ACCESS_KEY_ID: z.string().min(1),

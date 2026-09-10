@@ -13,6 +13,19 @@ export interface EmailSender {
   send(message: EmailMessage): Promise<void>;
 }
 
+export class ResendEmailSender implements EmailSender {
+  constructor(private readonly apiKey: string, private readonly request: typeof fetch = fetch) {}
+
+  async send({ to, subject, text }: EmailMessage): Promise<void> {
+    const response = await this.request('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text }),
+    });
+    if (!response.ok) throw new Error(`Resend email request failed (${response.status})`);
+  }
+}
+
 class SmtpEmailSender implements EmailSender {
   constructor(private readonly transporter: Transporter) {}
 
@@ -38,6 +51,7 @@ class ConsoleEmailSender implements EmailSender {
 }
 
 function buildEmailSender(): EmailSender {
+  if (env.RESEND_API_KEY) return new ResendEmailSender(env.RESEND_API_KEY);
   if (!env.SMTP_HOST) return new ConsoleEmailSender();
 
   const port = env.SMTP_PORT ?? 1025;

@@ -1,0 +1,7 @@
+{
+  "name": "docsense",
+  "private": true,
+  "scripts": {
+    "prod": "npm --prefix api run typecheck && npm --prefix api run build && npm --prefix api run test:email && npm --prefix web run build && test -z \"$(git status --porcelain)\" && git push origin main"
+  }
+}
